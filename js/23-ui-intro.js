@@ -1,48 +1,93 @@
 'use strict';
-/* 23-UI-INTRO: анимированная комикс-заставка (пропускаемая) */
+/* ============================================
+23-UI-INTRO: анимированная комикс-заставка (пропускаемая)
+ФИКС: картинки грузятся с версией, чтобы браузер
+не показывал старые из кэша
+============================================ */
+
+/* Подними эту версию, когда заменишь картинки —
+   браузер принудительно загрузит новые файлы */
+var INTRO_VER = '2';
+
 var INTRO_SLIDES=[
 {img:'img/intro1.png',cap:'Десять миров жили в мире под защитой Печати Зари...'},
 {img:'img/intro2.png',cap:'Но ПОЖИРАТЕЛЬ МИРОВ разорвал печать! Он поглощает миры один за другим.'},
 {img:'img/intro3.png',cap:'Старец указал путь: чудовище скрылось в Великом Подземелье. Семь героев клянутся вернуть свет.'},
 {img:'img/intro4.png',cap:'Сто этажей тьмы. Тысячи монстров. Одна надежда. Спустись и останови Пожирателя!'}
 ];
+
 var introTimer=null,introIdx=0;
+
+/* Ссылка на картинку с версией против кэша */
+function introImgSrc(s){
+  return s.img + '?v=' + INTRO_VER;
+}
+
 function showIntroSlide(n){
   var s=INTRO_SLIDES[n];
-  var img=$('#intro-img');if(img)img.src=s.img;
-  var cap=$('#intro-cap');if(cap)cap.textContent=s.cap;
-  var cnt=$('#intro-count');if(cnt)cnt.textContent=(n+1)+' / '+INTRO_SLIDES.length;
+
+  var cap=$('#intro-cap');
+  if(cap)cap.textContent=s.cap;
+
+  var cnt=$('#intro-count');
+  if(cnt)cnt.textContent=(n+1)+' / '+INTRO_SLIDES.length;
+
+  var img=$('#intro-img');
+  if(img){
+    /* Предзагрузка: меняем картинку без мигания */
+    var pre=new Image();
+    pre.onload=function(){ img.src=pre.src; };
+    pre.onerror=function(){ img.src=pre.src; };
+    pre.src=introImgSrc(s);
+  }
+
   var p=$('#intro-panel');
-  if(p){p.classList.remove('anim');void p.offsetWidth;p.classList.add('anim');}
+  if(p){
+    p.classList.remove('anim');
+    void p.offsetWidth;
+    p.classList.add('anim');
+  }
+
   sfx.mystic();
 }
+
 function closeIntro(){
   if(introTimer){clearInterval(introTimer);introTimer=null;}
-  var o=$('#ovl-intro');if(o)o.classList.remove('on');
+  var o=$('#ovl-intro');
+  if(o)o.classList.remove('on');
 }
+
 function playIntro(){
-  var ovl=$('#ovl-intro');if(!ovl)return;
+  var ovl=$('#ovl-intro');
+  if(!ovl)return;
+
   introIdx=0;
   ovl.classList.add('on');
   showIntroSlide(0);
+
   introTimer=setInterval(function(){
     introIdx++;
     if(introIdx>=INTRO_SLIDES.length)closeIntro();
     else showIntroSlide(introIdx);
   },5000);
 }
+
 function initIntro(){
   var skip=$('#intro-skip');
   if(skip)skip.onclick=function(e){e.stopPropagation();closeIntro();};
+
   var panel=$('#intro-panel');
   if(panel)panel.onclick=function(){
     introIdx++;
     if(introIdx>=INTRO_SLIDES.length)closeIntro();
     else showIntroSlide(introIdx);
   };
+
   var replay=$('#btn-intro');
   if(replay)replay.onclick=function(){playIntro();};
+
   playIntro();
 }
+
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initIntro);
 else initIntro();

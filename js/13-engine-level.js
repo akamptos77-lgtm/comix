@@ -71,7 +71,12 @@ function chooseAttr(lvl){
       );
     }).join('');
 
-    openOvl('ovl-attrs');
+    if (typeof openOvl === 'function') {
+      openOvl('ovl-attrs');
+    } else {
+      res();
+      return;
+    }
 
     row.querySelectorAll('.attr-btn').forEach(function(b){
       b.onclick = function(){
@@ -136,7 +141,12 @@ function chooseCard(){
       );
     }).join('');
 
-    openOvl('ovl-cards');
+    if (typeof openOvl === 'function') {
+      openOvl('ovl-cards');
+    } else {
+      res();
+      return;
+    }
 
     row.querySelectorAll('.fate-card').forEach(function(b){
       b.onclick = function(){
@@ -317,6 +327,7 @@ function startRun(k){
 
   G.cycle = 0;
   G.relics = [];
+  G.relicBuys = 0;
   G.pendingQuests = [];
   G.round = 0;
   G.busy = false;
