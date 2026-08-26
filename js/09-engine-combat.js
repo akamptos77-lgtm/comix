@@ -1,12 +1,30 @@
 'use strict';
 /* ============================================
-   09-ENGINE-COMBAT: бой, биомы, спутник (фикс),
-   экономика, карточки, автосохранение
+   09-ENGINE-COMBAT: бой + реликвии встроены
+   (фикс dropRelic is not defined)
    ============================================ */
 
 function calcDmg(atk,def,mult,ign){return Math.max(1,Math.round(atk*(mult||1)*rand(.85,1.15)-(ign?0:def*.5)));}
 
-/* --- Удар героя (+ эффекты биомов) --- */
+/* === РЕЛИКВИИ (встроены сюда, чтобы не было ReferenceError) === */
+function giveRelic(rel){
+  if(!rel)return false;
+  if(!G.relics)G.relics=[];
+  if(G.relics.indexOf(rel.id)>=0){G.gold+=60;log('🏺 Дубликат реликвии! +60💰');return false;}
+  if(G.relics.length>=3){G.gold+=100;log('🏺 '+rel.n+' не поместился! +100💰');return false;}
+  G.relics.push(rel.id);
+  log('🏺 РЕЛИКВИЯ: '+rel.i+' '+rel.n+'!');
+  sfx.mystic();
+  return true;
+}
+function dropRelic(){
+  var owned=G.relics||[];
+  var pool=RELICS.filter(function(r){return owned.indexOf(r.id)<0;});
+  if(!pool.length)return null;
+  return pick(pool);
+}
+
+/* --- Удар героя (+ биомы) --- */
 function heroStrike(mult,opts){
   opts=opts||{};var h=G.hero,e=G.enemy;
   if(!e||e.dead)return Promise.resolve();
@@ -79,10 +97,7 @@ function startCombat(kind,isMimic){
     var tier=getBiomeIdx(f);
     var pool=ENEMY_POOL.filter(function(e){return e.tier===tier;});
     if(!pool.length)pool=ENEMY_POOL;
-    if(kind==='elite'){
-      var ep=pool.filter(function(e){return e.tier>=Math.max(1,tier-1);});
-      if(ep.length)pool=ep;
-    }
+    if(kind==='elite'){var ep=pool.filter(function(e){return e.tier>=Math.max(1,tier-1);});if(ep.length)pool=ep;}
     base=pick(pool);
     G.enemy=makeEnemy(base,kind,false);
   }
@@ -93,7 +108,6 @@ function startCombat(kind,isMimic){
   updateHUD();updateActions();
 }
 
-/* --- Ход врага (+ эффекты биомов) --- */
 function enemyTurn(){
   var h=G.hero,e=G.enemy;
   if(!e||e.dead)return Promise.resolve();
@@ -175,7 +189,7 @@ function onAction(a){
   continueAction(a);
 }
 
-/* === ГЛАВНЫЙ ФИКС: спутник атакует, ПОТОМ враг ходит ВСЕГДА === */
+/* === Цепочка хода: герой → спутник → враг ВСЕГДА === */
 function continueAction(a){
   var h=G.hero,e=G.enemy;G.busy=true;updateActions();var chain=Promise.resolve();
   if(a==='atk'){chain=heroStrike(1,{});}
@@ -211,13 +225,10 @@ function continueAction(a){
     }
     log('Не вышло!');chain=sleep(400);
   }
-
-  /* Шаг 1: герой ударил */
   chain.then(function(){
     if(h.hp<=0)return defeat();
     if(e&&e.dead)return winCombat();
     return sleep(200);
-  /* Шаг 2: спутник атакует (если есть) */
   }).then(function(){
     if(G.phase!=='combat')return;
     if(e&&e.dead)return;
@@ -228,13 +239,11 @@ function continueAction(a){
       }).catch(function(err){console.warn('companionAttack error',err);});
     }
     return Promise.resolve();
-  /* Шаг 3: враг ходит ВСЕГДА, если жив */
   }).then(function(){
     if(G.phase!=='combat')return;
     if(e&&e.dead)return;
     if(h.hp<=0)return defeat();
     return enemyTurn();
-  /* Шаг 4: конец раунда */
   }).then(function(){
     if(G.phase!=='combat')return;
     if(h.hp<=0)return defeat();
