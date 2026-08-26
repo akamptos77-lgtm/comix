@@ -1,225 +1,423 @@
 'use strict';
 /* ============================================
-   22-UI-INIT: Инициализация + Автосейв UI
-   ============================================ */
+22-UI-INIT: инициализация интерфейса,
+сохранения, клавиатура, фикс КД навыков
+============================================ */
 
 function init(){
-  initTooltip();
-  
-  // 1. Проверяем наличие сохранения
+  if (typeof initTooltip === 'function') {
+    initTooltip();
+  }
+
   var hasSave = checkSave();
-  
-  // 2. Рендерим меню
-  renderScoresAsync(); // Асинхронный зал славы
-  renderHeroCards();
-  updateHUD();
-  
-  // 3. Показываем/скрываем кнопку "Продолжить"
+
+  if (typeof renderScoresAsync === 'function') {
+    renderScoresAsync();
+  }
+
+  if (typeof renderHeroCards === 'function') {
+    renderHeroCards();
+  }
+
+  if (typeof updateHUD === 'function') {
+    updateHUD();
+  }
+
   var btnContinue = $('#btn-continue');
   if (btnContinue) {
     btnContinue.style.display = hasSave ? 'inline-block' : 'none';
   }
 
-  /* --- КНОПКИ МЕНЮ --- */
+  /* --- Кнопки меню --- */
   var btnStart = $('#btn-start');
-  if(btnStart) btnStart.onclick = function(){ 
-    clearRun(); // Новая игра стирает старое сохранение
-    ac(); sfx.click(); show('scr-hero'); 
-  };
+  if (btnStart) {
+    btnStart.onclick = function(){
+      clearRun();
+      if (typeof ac === 'function') ac();
+      if (typeof sfx !== 'undefined' && sfx.click) sfx.click();
+      show('scr-hero');
+    };
+  }
 
-  var btnContinue = $('#btn-continue');
-  if(btnContinue) btnContinue.onclick = function(){
-    if (loadRun()) {
-      ac(); sfx.click();
-      show('scr-game');
-      // Восстанавливаем UI
-      buildActions();
-      updateHUD();
-      updateActions();
-      renderElixirs();
-      
-      // Если мы были в бою, нужно перерисовать врага и героя
-      if (G.phase === 'combat') {
-        $('#actions').classList.remove('hidden');
-        $('#elixirs').classList.remove('hidden');
-        // Canvas сам перерисуется в цикле loop()
-      } else if (G.phase === 'doors') {
-        renderDoors();
+  if (btnContinue) {
+    btnContinue.onclick = function(){
+      if (loadRun()) {
+        G.busy = false;
+        if (typeof sfx !== 'undefined' && sfx.click) sfx.click();
+
+        show('scr-game');
+
+        if (typeof buildActions === 'function') buildActions();
+        if (typeof updateHUD === 'function') updateHUD();
+        if (typeof renderElixirs === 'function') renderElixirs();
+
+        if (G.phase === 'combat') {
+          var actionsEl = $('#actions');
+          if (actionsEl) actionsEl.classList.remove('hidden');
+
+          var elixirsEl = $('#elixirs');
+          if (elixirsEl) elixirsEl.classList.remove('hidden');
+
+          if (typeof updateActions === 'function') updateActions();
+        } else if (G.phase === 'doors') {
+          if (typeof renderDoors === 'function') renderDoors();
+        } else {
+          G.phase = 'doors';
+          if (typeof renderDoors === 'function') renderDoors();
+        }
+
+        log('📂 Забег восстановлен! Этаж ' + G.floor);
       } else {
-        // Если фаза неизвестна, сбрасываем на двери
-        G.phase = 'doors';
-        renderDoors();
+        log('Ошибка загрузки сохранения');
+        show('scr-menu');
       }
-      log('📂 Забег восстановлен! Этаж ' + G.floor);
-    } else {
-      log('Ошибка загрузки сохранения');
-      show('scr-menu');
-    }
-  };
+    };
+  }
 
   var btnHeroback = $('#btn-heroback');
-  if(btnHeroback) btnHeroback.onclick = function(){ sfx.click(); show('scr-menu'); checkSave(); $('#btn-continue').style.display = G.hasSave?'inline-block':'none'; };
+  if (btnHeroback) {
+    btnHeroback.onclick = function(){
+      if (typeof sfx !== 'undefined' && sfx.click) sfx.click();
 
-  /* --- СЛОЖНОСТЬ --- */
+      show('scr-menu');
+      checkSave();
+
+      var c = $('#btn-continue');
+      if (c) {
+        c.style.display = G.hasSave ? 'inline-block' : 'none';
+      }
+    };
+  }
+
+  /* --- Сложность --- */
   var diffs = $('#diffs');
-  if(diffs){
+  if (diffs) {
     diffs.addEventListener('click', function(e){
       var b = e.target.closest('.diff-pill');
-      if(!b) return;
-      sfx.click();
+      if (!b) return;
+
+      if (typeof sfx !== 'undefined' && sfx.click) sfx.click();
+
       G.diff = b.dataset.d;
-      $$('.diff-pill').forEach(function(p){ p.classList.toggle('sel', p === b); });
+
+      $$('.diff-pill').forEach(function(p){
+        p.classList.toggle('sel', p === b);
+      });
     });
   }
 
-  /* --- ВХОД --- */
+  /* --- Вход --- */
   var btnLogin = $('#btn-login');
-  if(btnLogin){
+  if (btnLogin) {
     btnLogin.onclick = function(){
-      if(getUser()){ localStorage.removeItem(LU_USER); renderScoresAsync(); }
-      else { openOvl('ovl-login'); setTimeout(function(){ var li=$('#login-inp'); if(li) li.focus(); },100); }
+      if (getUser()) {
+        localStorage.removeItem('kcigames_user');
+        renderScoresAsync();
+      } else {
+        openOvl('ovl-login');
+        setTimeout(function(){
+          var li = $('#login-inp');
+          if (li) li.focus();
+        }, 100);
+      }
     };
   }
+
   var loginOk = $('#login-ok');
-  if(loginOk) loginOk.onclick = function(){
-    var n = $('#login-inp').value.trim();
-    if(n){ setUser(n); renderScoresAsync(); closeOvl('ovl-login'); }
-  };
+  if (loginOk) {
+    loginOk.onclick = function(){
+      var inp = $('#login-inp');
+      var n = inp ? inp.value.trim() : '';
+
+      if (n) {
+        setUser(n);
+        renderScoresAsync();
+        closeOvl('ovl-login');
+      }
+    };
+  }
+
   var loginCancel = $('#login-cancel');
-  if(loginCancel) loginCancel.onclick = function(){ closeOvl('ovl-login'); };
+  if (loginCancel) {
+    loginCancel.onclick = function(){
+      closeOvl('ovl-login');
+    };
+  }
 
-  /* --- ТУТОРИАЛ --- */
+  /* --- Туториал --- */
   var btnTut = $('#btn-tutorial');
-  if(btnTut) btnTut.onclick = showTutorial;
+  if (btnTut) {
+    btnTut.onclick = function(){
+      if (typeof showTutorial === 'function') showTutorial();
+    };
+  }
+
   var tutPrev = $('#tut-prev');
-  if(tutPrev) tutPrev.onclick = function(){ if(tutStep>0){ tutStep--; renderTut(); } };
+  if (tutPrev) {
+    tutPrev.onclick = function(){
+      if (tutStep > 0) {
+        tutStep--;
+        renderTut();
+      }
+    };
+  }
+
   var tutNext = $('#tut-next');
-  if(tutNext) tutNext.onclick = function(){
-    if(tutStep < TUTORIAL.length-1){ tutStep++; renderTut(); }
-    else closeOvl('ovl-tutorial');
-  };
+  if (tutNext) {
+    tutNext.onclick = function(){
+      if (tutStep < TUTORIAL.length - 1) {
+        tutStep++;
+        renderTut();
+      } else {
+        closeOvl('ovl-tutorial');
+      }
+    };
+  }
 
-  /* --- БЕСТИАРИЙ --- */
+  /* --- Бестиарий --- */
   var btnBest = $('#btn-bestiary');
-  if(btnBest) btnBest.onclick = function(){ renderBestiary(); openOvl('ovl-bestiary'); };
+  if (btnBest) {
+    btnBest.onclick = function(){
+      if (typeof renderBestiary === 'function') renderBestiary();
+      openOvl('ovl-bestiary');
+    };
+  }
+
   var btnBest2 = $('#btn-best2');
-  if(btnBest2) btnBest2.onclick = function(){ renderBestiary(); openOvl('ovl-bestiary'); };
+  if (btnBest2) {
+    btnBest2.onclick = function(){
+      if (typeof renderBestiary === 'function') renderBestiary();
+      openOvl('ovl-bestiary');
+    };
+  }
 
-  /* --- ИНВЕНТАРЬ --- */
+  /* --- Инвентарь --- */
   var btnInv = $('#btn-inv');
-  if(btnInv) btnInv.onclick = function(){ renderInv(); openOvl('ovl-inv'); };
+  if (btnInv) {
+    btnInv.onclick = function(){
+      if (typeof renderInv === 'function') renderInv();
+      openOvl('ovl-inv');
+    };
+  }
 
-  /* --- ЗАКРЫТИЕ МОДАЛОК --- */
+  /* --- Закрытие модалок --- */
   $$('.ovl [data-close]').forEach(function(b){
     b.addEventListener('click', function(){
       var ovl = b.closest('.ovl');
-      if(ovl) ovl.classList.remove('on');
+      if (ovl) ovl.classList.remove('on');
     });
   });
+
   $$('.ovl').forEach(function(o){
     o.addEventListener('click', function(e){
-      if(e.target === o && !o.dataset.locked) o.classList.remove('on');
+      if (e.target === o && !o.dataset.locked) {
+        o.classList.remove('on');
+      }
     });
   });
 
-  /* --- НАВЫКИ --- */
+  /* --- Навыки --- */
   var btnSkills = $('#btn-skills');
-  if(btnSkills){
+  if (btnSkills) {
     btnSkills.onclick = function(){
-      if(G.phase === 'combat'){ log('Нельзя в бою!'); return; }
-      if(!G.hero) return;
-      renderSkillBook(); openOvl('ovl-skills');
+      if (G.phase === 'combat') {
+        log('Нельзя в бою!');
+        return;
+      }
+
+      if (!G.hero) return;
+
+      if (typeof renderSkillBook === 'function') renderSkillBook();
+      openOvl('ovl-skills');
     };
   }
 
-  /* --- ЛИСТ ПЕРСОНАЖА --- */
+  /* --- Лист персонажа --- */
   var btnSheet = $('#btn-sheet');
-  if(btnSheet){
+  if (btnSheet) {
     btnSheet.onclick = function(){
-      if(!G.hero) return;
-      renderSheet(); openOvl('ovl-sheet');
+      if (!G.hero) return;
+
+      if (typeof renderSheet === 'function') renderSheet();
+      openOvl('ovl-sheet');
     };
   }
-  
-  /* --- ЖУРНАЛ --- */
-  var btnLog = $('#btn-log');
-  if(btnLog) btnLog.onclick = function(){ renderLog(); openOvl('ovl-log'); };
 
-  /* --- БОЙ --- */
+  /* --- Журнал --- */
+  var btnLog = $('#btn-log');
+  if (btnLog) {
+    btnLog.onclick = function(){
+      if (typeof renderLog === 'function') renderLog();
+      openOvl('ovl-log');
+    };
+  }
+
+  /* --- Бой: клики мышью --- */
   var actions = $('#actions');
-  if(actions){
+  if (actions) {
     actions.addEventListener('click', function(e){
       var b = e.target.closest('button[data-a]');
-      if(b && !b.disabled) onAction(b.dataset.a);
+      if (b && !b.disabled) {
+        onAction(b.dataset.a);
+      }
     });
   }
 
-  /* --- ФИНАЛ --- */
+  /* --- Финал --- */
   var endSaveBtn = $('#end-save');
-  if(endSaveBtn){
+  if (endSaveBtn) {
     endSaveBtn.onclick = function(){
-      var n = $('#end-inp').value.trim() || getUser() || 'Аноним';
+      var inp = $('#end-inp');
+      var n = inp ? inp.value.trim() : '';
+
+      n = n || getUser() || 'Аноним';
+
       setUser(n);
       endSaveBtn.disabled = true;
       endSaveBtn.textContent = '⏳ Сохраняю...';
+
       saveScoreAsync(n, calcScore(), G.floor).then(function(){
         endSaveBtn.textContent = '✔ Сохранено!';
         renderScoresAsync();
       });
     };
   }
+
   var endRetry = $('#end-retry');
-  if(endRetry){
+  if (endRetry) {
     endRetry.onclick = function(){
-      clearRun(); // Стираем сохранение при рестарте
+      clearRun();
       closeOvl('ovl-end');
+
       var cls = G.lastClass || 'knight';
+
       show('scr-game');
       startRun(cls);
     };
   }
+
   var endMenu = $('#end-menu');
-  if(endMenu){
-    endMenu.onclick = function(){ 
-      clearRun(); // Стираем сохранение при выходе в меню
-      closeOvl('ovl-end'); 
-      show('scr-menu'); 
-      renderScoresAsync(); 
+  if (endMenu) {
+    endMenu.onclick = function(){
+      clearRun();
+      closeOvl('ovl-end');
+
+      show('scr-menu');
+      renderScoresAsync();
       checkSave();
-      $('#btn-continue').style.display = 'none';
+
+      var c = $('#btn-continue');
+      if (c) c.style.display = 'none';
     };
   }
 
-  /* --- КЛАВИАТУРА --- */
+  /* ============================================
+  КЛАВИАТУРА
+  Фикс: теперь проверяется disabled кнопки
+  и блокируется автоповтор клавиши
+  ============================================ */
   document.addEventListener('keydown', function(e){
-    if(e.key === 'Escape'){
+    if (typeof G === 'undefined') return;
+
+    var active = document.activeElement;
+    var isTyping = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
+
+    if (e.key === 'Escape') {
+      if (isTyping) {
+        active.blur();
+        return;
+      }
+
       $$('.ovl.on').forEach(function(o){
-        if(['ovl-attrs','ovl-cards','ovl-quest'].indexOf(o.id) < 0) closeOvl(o.id);
+        if (['ovl-attrs', 'ovl-cards', 'ovl-quest'].indexOf(o.id) < 0) {
+          closeOvl(o.id);
+        }
       });
+
       return;
     }
-    if(e.key === 'i' || e.key === 'I' || e.key === 'ш' || e.key === 'Ш'){
-      if(G.hero && G.phase !== 'over'){ renderInv(); openOvl('ovl-inv'); }
+
+    if (isTyping) return;
+
+    if (e.key === 'i' || e.key === 'I' || e.key === 'ш' || e.key === 'Ш') {
+      if (G.hero && G.phase !== 'over') {
+        if (typeof renderInv === 'function') renderInv();
+        openOvl('ovl-inv');
+      }
       return;
     }
-    if(e.key === 'Enter'){
+
+    function isOn(id){
+      var o = $(id);
+      return o && o.classList.contains('on');
+    }
+
+    if (e.key === 'Enter') {
+      if (isOn('#ovl-end') || isOn('#ovl-attrs') || isOn('#ovl-cards') || isOn('#ovl-quest')) {
+        return;
+      }
+
       var n = $('#btn-next');
+      if (n) {
+        n.click();
+        return;
+      }
+
       var p2 = document.querySelector('#event-layer .ev .cbtn');
-      if($('#ovl-end') && $('#ovl-end').classList.contains('on')) return;
-      if(n){ n.click(); return; }
-      if(p2 && !$('#ovl-cards').classList.contains('on') && !$('#ovl-attrs').classList.contains('on') && !$('#ovl-quest').classList.contains('on')){ p2.click(); return; }
+      if (p2) {
+        p2.click();
+        return;
+      }
     }
-    if(G.phase !== 'combat' || G.busy) return;
-    var m = {'1':'atk','2':'skill','3':'skill2','4':'def','5':'pot','6':'flee'};
-    if(m[e.key]) onAction(m[e.key]);
+
+    if (G.phase !== 'combat' || G.busy) return;
+
+    /* Защита от зажатой клавиши */
+    if (e.repeat) return;
+
+    var m = {
+      '1': 'atk',
+      '2': 'skill',
+      '3': 'skill2',
+      '4': 'def',
+      '5': 'pot',
+      '6': 'flee'
+    };
+
+    var k = e.key;
+
+    if (e.code && e.code.indexOf('Digit') === 0) {
+      k = e.code.slice(5);
+    }
+
+    if (e.code && e.code.indexOf('Numpad') === 0) {
+      k = e.code.slice(6);
+    }
+
+    var a = m[k];
+    if (!a) return;
+
+    /* Главное исправление: клавиша не работает, если кнопка на перезарядке */
+    var btn = document.querySelector('.abtn[data-a="' + a + '"]');
+    if (!btn || btn.disabled) return;
+
+    if (e.preventDefault) e.preventDefault();
+
+    onAction(a);
   });
 
-  /* --- ТУТОРИАЛ ПРИ ПЕРВОМ ЗАПУСКЕ --- */
-  if(!localStorage.getItem('kcigames_tut_seen')){
-    localStorage.setItem('kcigames_tut_seen','1');
-    setTimeout(showTutorial, 500);
+  /* --- Туториал при первом запуске --- */
+  if (!localStorage.getItem('kcigames_tut_seen')) {
+    localStorage.setItem('kcigames_tut_seen', '1');
+
+    if (typeof showTutorial === 'function') {
+      setTimeout(showTutorial, 500);
+    }
   }
 }
 
-if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-else init();
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}

@@ -2,6 +2,7 @@
 /* ============================================
 13-ENGINE-LEVEL: опыт, уровни, атрибуты,
 благословения, финальный экран, статистика
++ защита от повторных кликов
 ============================================ */
 
 function gainXp(n){
@@ -78,8 +79,19 @@ function chooseAttr(lvl){
       return;
     }
 
+    /* Защита от повторного выбора */
+    var resolved = false;
+
     row.querySelectorAll('.attr-btn').forEach(function(b){
       b.onclick = function(){
+        if (resolved) return;
+        resolved = true;
+
+        /* Блокируем все кнопки, чтобы нельзя было кликнуть ещё раз */
+        row.querySelectorAll('.attr-btn').forEach(function(x){
+          x.disabled = true;
+        });
+
         var k = this.dataset.k;
 
         h.stats[k]++;
@@ -148,8 +160,19 @@ function chooseCard(){
       return;
     }
 
+    /* Защита от повторного выбора */
+    var resolved = false;
+
     row.querySelectorAll('.fate-card').forEach(function(b){
       b.onclick = function(){
+        if (resolved) return;
+        resolved = true;
+
+        /* Блокируем все карточки */
+        row.querySelectorAll('.fate-card').forEach(function(x){
+          x.disabled = true;
+        });
+
         var c = picks[parseInt(this.dataset.i, 10)];
 
         c.f(h);
@@ -228,6 +251,7 @@ function getQuestsDoneCount(){
 
 function showEnd(win){
   G.phase = 'over';
+  G.busy = false;
 
   var actions = $('#actions');
   if (actions) actions.classList.add('hidden');
@@ -292,6 +316,9 @@ function startRun(k){
 
   G.lastClass = k;
   G.phase = 'doors';
+
+  /* Сброс зависшего состояния */
+  G.busy = false;
 
   G.hero = {
     cls: k,
@@ -384,7 +411,6 @@ function startRun(k){
   G.relicBuys = 0;
   G.pendingQuests = [];
   G.round = 0;
-  G.busy = false;
   G.logArr = [];
   G.phoenixCd = 0;
 
