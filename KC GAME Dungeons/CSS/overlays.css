@@ -1,0 +1,186 @@
+/* ============================================
+   ОВЕРЛЕИ: модалки, инвентарь, бестиарий,
+   лист персонажа, атрибуты, адаптив
+   ============================================ */
+
+/* ===== ОВЕРЛЕИ ===== */
+.ovl{
+  position:fixed;inset:0;
+  background:rgba(8,4,18,.78);
+  display:none;align-items:center;justify-content:center;
+  z-index:60;padding:16px;
+}
+.ovl.on{display:flex}
+.ovl .panel{
+  max-width:760px;width:100%;text-align:center;
+  animation:pop .3s;max-height:92vh;overflow:auto;
+}
+@keyframes pop{
+  from{transform:scale(.7);opacity:0}
+  to{transform:scale(1);opacity:1}
+}
+.ovl h2{font-family:'Russo One';font-size:28px;margin-bottom:12px}
+
+/* ===== КАРТОЧКИ СУДЬБЫ ===== */
+.cards-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:10px}
+.fate-card{
+  font-family:inherit;width:170px;
+  background:#fff;border:4px solid var(--ink);border-radius:14px;
+  padding:14px 10px;cursor:pointer;
+  box-shadow:6px 6px 0 var(--ink);transition:.14s;font-size:13.5px;
+}
+.fate-card:hover{
+  transform:translateY(-8px) rotate(1.5deg);
+  background:#fff3b8;border-color:#a06b00;
+}
+.fate-card .fc-i{font-size:40px}
+.fate-card b{display:block;margin:6px 0 3px;font-size:15px}
+
+/* ===== ФИНАЛ ===== */
+.end-stats{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+  gap:10px;margin:14px 0;
+}
+.end-stats div{
+  background:#fff;border:3px solid var(--ink);
+  border-radius:12px;padding:10px;font-weight:700;
+}
+.end-stats .big{
+  grid-column:1/-1;background:var(--yel);
+  font-family:'Russo One';font-size:22px;
+}
+.ovl input{
+  font-family:inherit;font-size:17px;
+  border:3px solid var(--ink);border-radius:10px;
+  padding:10px;width:100%;max-width:300px;
+  margin:8px 0;background:#fff;
+}
+
+/* ===== ИНВЕНТАРЬ ===== */
+.inv-grid{
+  display:grid;grid-template-columns:repeat(4,1fr);
+  gap:10px;margin:14px 0;
+}
+.inv-slot{
+  background:#fff;border:3px solid var(--ink);border-radius:12px;
+  padding:10px;text-align:center;cursor:pointer;
+  box-shadow:4px 4px 0 var(--ink);transition:.15s;
+  min-height:110px;display:flex;flex-direction:column;
+  justify-content:center;position:relative;
+}
+.inv-slot:hover{transform:translate(-2px,-2px);box-shadow:6px 6px 0 var(--ink)}
+.inv-slot small{font-family:'Russo One';font-size:11px;color:#8a6b3f;display:block;margin-bottom:4px}
+.inv-slot .ii{font-size:28px;display:block;margin-bottom:3px}
+.inv-slot b{font-size:12px;display:block;margin-bottom:3px}
+.inv-slot span{font-size:10px;color:#4a6b2f;display:block}
+.inv-slot.empty{opacity:.6}
+.inv-slot.cursed{border-color:#8a1eff;background:#f0e8ff}
+
+.bag-title{font-family:'Russo One';font-size:16px;margin-top:12px;color:#5a1a1a}
+.bag-row{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));
+  gap:10px;margin-top:8px;
+}
+.bag-item{
+  font-family:inherit;text-align:left;color:var(--ink);
+  padding:10px;border-radius:10px;background:#fff;
+  border:3px solid #8a6b3f;transition:.15s;
+  display:flex;flex-direction:column;gap:3px;
+  font-size:12.5px;position:relative;
+}
+.bag-item:hover{box-shadow:4px 4px 0 var(--ink);transform:translateY(-2px)}
+.bag-item b{font-size:13px;display:flex;gap:4px;align-items:center}
+.bag-item span{font-size:11px;color:#4a6b2f}
+.bag-item small{font-size:10px;opacity:.6}
+.bag-actions{display:flex;gap:5px;margin-top:6px}
+.bag-actions .cbtn{flex:1;font-size:11px;padding:5px 8px;box-shadow:2px 2px 0 var(--ink);border-width:2px}
+.bag-item.rar1{border-color:#4a7fb5;box-shadow:0 0 10px rgba(74,127,181,.35)}
+.bag-item.rar2{border-color:#8a5cf5;box-shadow:0 0 12px rgba(138,92,245,.45)}
+.bag-item.cursed{border-color:#8a1eff;background:#f0e8ff}
+
+.rar-tag{
+  font-size:9px;font-weight:700;letter-spacing:.06em;
+  text-transform:uppercase;padding:1px 5px;border-radius:4px;
+}
+.rar0 .rar-tag{background:#8a6b3f;color:#fff}
+.rar1 .rar-tag{background:#4a7fb5;color:#fff}
+.rar2 .rar-tag{background:#8a5cf5;color:#fff}
+.cursed .rar-tag{background:#8a1eff;color:#fff}
+.up-tag{color:#6e1d1d;font-weight:700}
+#invStats{font-size:13px;margin-top:12px;color:#3a2410;line-height:1.5}
+#invStats b{color:#5a1a1a}
+
+/* ===== АТРИБУТЫ ===== */
+.attr-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:14px}
+.attr-btn{
+  font-family:inherit;font-size:15px;text-align:left;cursor:pointer;
+  color:var(--ink);background:#fff;
+  border:4px solid var(--ink);border-radius:14px;
+  padding:14px;display:flex;flex-direction:column;gap:4px;
+  transition:.15s;box-shadow:5px 5px 0 var(--ink);
+}
+.attr-btn:hover{
+  transform:translate(-2px,-2px);
+  box-shadow:7px 7px 0 var(--ink);background:var(--yel);
+}
+.attr-btn b{
+  font-family:'Russo One';letter-spacing:.06em;font-size:17px;
+  display:flex;align-items:center;gap:8px;
+}
+.attr-btn .av{font-size:12px;color:#6e1d1d}
+.attr-btn small{opacity:.75;font-size:12.5px;line-height:1.3}
+.attr-ico{font-size:28px}
+
+/* ===== БЕСТИАРИЙ ===== */
+.best-grid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+  gap:12px;margin-top:12px;text-align:left;
+}
+.best-card{
+  background:#fff;border:3px solid var(--ink);
+  border-radius:12px;padding:12px;font-size:12.5px;position:relative;
+}
+.best-card.locked{opacity:.55;filter:grayscale(1)}
+.best-card .bi{font-size:34px;float:right}
+.best-card b{font-size:14px;display:block;margin-bottom:4px}
+.best-card .elem{
+  display:inline-block;padding:1px 6px;border-radius:6px;
+  font-size:10.5px;margin:1px;color:#fff;font-weight:700;
+}
+.best-card p{margin-top:6px;font-size:11.5px;line-height:1.3;opacity:.85}
+
+/* ===== ЛИСТ ПЕРСОНАЖА ===== */
+.sheet-grid{
+  display:grid;grid-template-columns:repeat(2,1fr);
+  gap:14px;text-align:left;margin-top:14px;
+}
+.sheet-sec{background:#fff;border:3px solid var(--ink);border-radius:12px;padding:12px}
+.sheet-sec h3{
+  font-family:'Russo One';font-size:15px;
+  margin-bottom:8px;border-bottom:2px solid var(--yel);padding-bottom:4px;
+}
+.sheet-stat{
+  display:flex;justify-content:space-between;
+  padding:3px 0;font-size:13px;border-bottom:1px dashed #ddd;
+  cursor:help;
+}
+.sheet-stat b{color:#5a1a1a}
+.quest-prog{
+  background:#ffe0c2;border:2px solid var(--ink);
+  border-radius:8px;padding:8px;margin-top:8px;font-size:13px;
+}
+
+/* ===== АДАПТИВ ===== */
+@media(max-width:1000px){
+  .hero-grid{grid-template-columns:repeat(3,1fr)}
+  .inv-grid{grid-template-columns:repeat(3,1fr)}
+}
+@media(max-width:860px){
+  .menu-grid{grid-template-columns:1fr}
+  .hero-grid{grid-template-columns:repeat(2,1fr)}
+  .sticker{display:none}
+  .inv-grid{grid-template-columns:repeat(2,1fr)}
+  .attr-grid{grid-template-columns:1fr}
+  .sheet-grid{grid-template-columns:1fr}
+  .abtn kbd{display:none}
+}
