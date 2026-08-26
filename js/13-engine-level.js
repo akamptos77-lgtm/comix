@@ -1,7 +1,7 @@
 'use strict';
 /* ============================================
 13-ENGINE-LEVEL: опыт, уровни, атрибуты,
-благословения, финальный экран, старт забега
+благословения, финальный экран, статистика
 ============================================ */
 
 function gainXp(n){
@@ -185,6 +185,47 @@ function calcScore(){
   );
 }
 
+/* === Статистика забега === */
+function getRunTimeText(){
+  if (!G.startTime) return '—';
+
+  var ms = Date.now() - G.startTime;
+  var totalSec = Math.floor(ms / 1000);
+
+  var min = Math.floor(totalSec / 60);
+  var sec = totalSec % 60;
+
+  return min + 'м ' + sec + 'с';
+}
+
+function getMaterialsTotal(){
+  var n = 0;
+
+  if (!G.materials) return 0;
+
+  for (var k in G.materials) {
+    if (G.materials.hasOwnProperty(k)) {
+      n += G.materials[k];
+    }
+  }
+
+  return n;
+}
+
+function getQuestsDoneCount(){
+  if (!G.quests) return 0;
+
+  var n = 0;
+
+  for (var i = 0; i < G.quests.length; i++) {
+    if (G.quests[i].progress >= G.quests[i].need) {
+      n++;
+    }
+  }
+
+  return n;
+}
+
 function showEnd(win){
   G.phase = 'over';
 
@@ -209,6 +250,13 @@ function showEnd(win){
       : 'ГЕРОЙ ПАЛ…';
   }
 
+  var relicsCount = G.relics ? G.relics.length : 0;
+  var chests = G.chestsOpened || 0;
+  var materials = getMaterialsTotal();
+  var questsDone = getQuestsDoneCount();
+  var runTime = getRunTimeText();
+  var cycles = G.cycle || 0;
+
   var stats = $('#end-stats');
   if (stats) {
     stats.innerHTML =
@@ -216,6 +264,12 @@ function showEnd(win){
       '<div>💀 Побед<br><b>' + G.kills + '</b></div>' +
       '<div>💰 Золото<br><b>' + G.gold + '</b></div>' +
       '<div>⭐ Уровень<br><b>' + h.level + '</b></div>' +
+      '<div>⏱ Время<br><b>' + runTime + '</b></div>' +
+      '<div>♾ Цикл<br><b>' + cycles + '</b></div>' +
+      '<div>🎁 Сундуки<br><b>' + chests + '</b></div>' +
+      '<div>🔮 Ингредименты<br><b>' + materials + '</b></div>' +
+      '<div>🏺 Реликвии<br><b>' + relicsCount + '</b></div>' +
+      '<div>📜 Квесты<br><b>' + questsDone + '</b></div>' +
       '<div class="big">ОЧКИ: ' + s + '</div>';
   }
 
@@ -333,6 +387,8 @@ function startRun(k){
   G.busy = false;
   G.logArr = [];
   G.phoenixCd = 0;
+
+  G.startTime = Date.now();
 
   G.quests = QUESTS.map(function(q){
     return {
