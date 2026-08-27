@@ -1,7 +1,8 @@
 /* ============================================
-   ОВЕРЛЕИ: модалки, инвентарь, бестиарий,
-   лист персонажа, атрибуты, адаптив
-   ============================================ */
+ОВЕРЛЕИ: модалки, инвентарь, бестиарий,
+лист персонажа, атрибуты, адаптив
++ ФИКС: высокие окна не обрезаются сверху
+============================================ */
 
 /* ===== ОВЕРЛЕИ ===== */
 .ovl{
@@ -75,7 +76,6 @@
 .inv-slot span{font-size:10px;color:#4a6b2f;display:block}
 .inv-slot.empty{opacity:.6}
 .inv-slot.cursed{border-color:#8a1eff;background:#f0e8ff}
-
 .bag-title{font-family:'Russo One';font-size:16px;margin-top:12px;color:#5a1a1a}
 .bag-row{
   display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));
@@ -97,7 +97,6 @@
 .bag-item.rar1{border-color:#4a7fb5;box-shadow:0 0 10px rgba(74,127,181,.35)}
 .bag-item.rar2{border-color:#8a5cf5;box-shadow:0 0 12px rgba(138,92,245,.45)}
 .bag-item.cursed{border-color:#8a1eff;background:#f0e8ff}
-
 .rar-tag{
   font-size:9px;font-weight:700;letter-spacing:.06em;
   text-transform:uppercase;padding:1px 5px;border-radius:4px;
@@ -183,4 +182,26 @@
   .attr-grid{grid-template-columns:1fr}
   .sheet-grid{grid-template-columns:1fr}
   .abtn kbd{display:none}
+}
+
+/* ============================================
+ФИКС: ВЫСОКИЕ ОКНА НЕ ОБРЕЗАЮТСЯ СВЕРХУ
+(кузнец, крафт, инвентарь и прочие модалки)
+============================================ */
+#event-layer{
+  overflow-y:auto;
+  align-items:flex-start !important;
+  padding:20px 10px;
+}
+#event-layer .ev{
+  margin:auto !important;
+  max-width:760px;
+}
+.ovl{
+  overflow-y:auto;
+  align-items:flex-start !important;
+  padding:20px 10px;
+}
+.ovl>.panel{
+  margin:auto !important;
 }
