@@ -1,8 +1,9 @@
 'use strict';
 /* ============================================
-   18-RENDER-MAIN: отрисовка сущностей
-   + статус-эффекты + главный игровой цикл
-   ============================================ */
+18-RENDER-MAIN: отрисовка сущностей,
+статус-эффекты + главный игровой цикл
+ФИКС: полоска HP босса поднята выше модели
+============================================ */
 
 /* --- Отрисовка героя --- */
 function drawHeroEnt(t){
@@ -30,14 +31,9 @@ function drawHeroEnt(t){
     ctx.fillRect(x-40, y-148, 80*fr, 9);
     ctx.strokeRect(x-42, y-150, 84, 13);
 
-    /* Статус-эффекты героя */
     var statusY = y - 175;
-    if(h.shield){
-      drawShieldFx(x, y, t);
-    }
-    if(h.defending){
-      ctx.font = '20px serif'; ctx.fillText('🛡', x-52, y-120);
-    }
+    if(h.shield){ drawShieldFx(x, y, t); }
+    if(h.defending){ ctx.font = '20px serif'; ctx.fillText('🛡', x-52, y-120); }
     if(h.poison){
       drawPoisonFx(x, y-40, t);
       ctx.font = '16px serif'; ctx.textAlign = 'center';
@@ -83,7 +79,11 @@ function drawEnemyEnt(t){
 
   if(!e.dead && e.fx.enter <= 0.3){
     ctx.strokeStyle = INK; ctx.lineWidth = 4;
-    var top = y - 150*e.scale, fr = e.hp/e.maxHp;
+
+    /* ФИКС: у боссов полоска поднята выше, чтобы не накладываться на модель */
+    var top = y - (e.boss ? 205 : 150) * (e.scale || 1);
+    var fr = e.hp / e.maxHp;
+
     ctx.fillStyle = '#111'; ctx.fillRect(x-52, top, 104, 14);
     ctx.fillStyle = fr < .3 ? '#ff8d2e' : '#ff4d5e';
     ctx.fillRect(x-50, top+2, 100*fr, 10);
@@ -100,43 +100,32 @@ function drawEnemyEnt(t){
       ctx.fillText(ACTION_LABELS[e.nextAction], x, top+28);
     }
 
-    /* === СТАТУС-ЭФФЕКТЫ ВРАГА === */
     var statusY = top - 30;
 
-    /* Оглушение: крутящиеся звёзды */
     if(e.stun > 0){
       drawStunFx(x, top - 40, T);
       ctx.font = '16px serif'; ctx.textAlign = 'center';
       ctx.fillText('💫', x, statusY); statusY -= 22;
       ctx.textAlign = 'left';
     }
-
-    /* Заморозка: глыба льда */
     if(e.frozen && e.frozen > 0){
       drawFreezeFx(x, y - 40*e.scale, e.scale);
     }
-
-    /* Поджог: языки пламени */
     if(e.burn && e.burn.turns > 0){
       drawBurnFx(x, y - 40*e.scale, T);
       ctx.font = '16px serif'; ctx.textAlign = 'center';
       ctx.fillText('🔥', x, statusY); statusY -= 22;
       ctx.textAlign = 'left';
     }
-
-    /* Яд: зелёные пузыри */
     if(e.poison && e.poison.turns > 0){
       drawPoisonFx(x, y - 40*e.scale, T);
       ctx.font = '16px serif'; ctx.textAlign = 'center';
       ctx.fillText('☠️', x, statusY); statusY -= 22;
       ctx.textAlign = 'left';
     }
-
-    /* Защита врага */
     if(e.defending){
       ctx.font = '24px serif'; ctx.fillText('🛡', x-60, y-120*e.scale);
     }
-
     ctx.textAlign = 'left';
   }
 }
@@ -146,13 +135,17 @@ var last = 0;
 function loop(ts){
   var dt = Math.min(.05, (ts-last)/1000 || 0);
   last = ts; T += dt;
+
   updEnt(G.hero, dt); updEnt(G.enemy, dt);
   fx.shake = Math.max(0, fx.shake - dt*34);
+
   ctx.save();
   if(fx.shake > 0) ctx.translate((Math.random()-.5)*fx.shake, (Math.random()-.5)*fx.shake);
+
   drawArena();
   if(G.hero){ drawHeroEnt(T); drawEnemyEnt(T); }
   drawFx(dt);
+
   ctx.restore();
   requestAnimationFrame(loop);
 }
