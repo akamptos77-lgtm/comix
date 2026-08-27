@@ -1,13 +1,217 @@
 'use strict';
 /* ============================================
 22-UI-INIT: инициализация интерфейса,
-сохранения, клавиатура, фикс КД навыков
+защита важных модалок, досрочное завершение
+забега с занесением в зал славы
 ============================================ */
 
+/* ============================================
+Список важных оверлеев, которые нельзя
+закрывать кликом по фону или Escape
+============================================ */
+var UI_LOCKED_OVLS = [
+  'ovl-attrs',
+  'ovl-cards',
+  'ovl-quest',
+  'ovl-end',
+  'ovl-end-run'
+];
+
+function uiIsLocked(id){
+  return UI_LOCKED_OVLS.indexOf(id) >= 0;
+}
+
+function uiIsOn(selector){
+  var o = $(selector);
+  return !!(o && o.classList.contains('on'));
+}
+
+function uiAnyLockedOpen(){
+  for (var i = 0; i < UI_LOCKED_OVLS.length; i++) {
+    if (uiIsOn('#' + UI_LOCKED_OVLS[i])) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/* ============================================
+Кнопка досрочного завершения забега
+============================================ */
+function updateEndRunButton(){
+  var btn = $('#btn-end-run');
+  if (!btn) return;
+
+  var visible =
+    typeof G !== 'undefined' &&
+    G.hero &&
+    G.phase &&
+    G.phase !== 'menu' &&
+    G.phase !== 'over';
+
+  btn.style.display = visible ? 'inline-block' : 'none';
+}
+
+function initEndRunButton(){
+  if ($('#btn-end-run')) return;
+
+  var btn = document.createElement('button');
+
+  btn.id = 'btn-end-run';
+  btn.className = 'cbtn small red';
+  btn.textContent = '🏁 Завершить';
+  btn.title = 'Завершить забег и занести результат в зал славы';
+
+  btn.style.cssText =
+    'position:fixed;right:14px;bottom:14px;z-index:95;' +
+    'box-shadow:4px 4px 0 var(--ink);';
+
+  btn.onclick = function(){
+    openEndRunModal();
+  };
+
+  document.body.appendChild(btn);
+}
+
+function ensureEndRunModal(){
+  var o = $('#ovl-end-run');
+  if (o) return o;
+
+  o = document.createElement('div');
+  o.className = 'ovl';
+  o.id = 'ovl-end-run';
+  o.dataset.locked = '1';
+
+  o.innerHTML =
+    '<div class="panel">' +
+    '<h2>🏁 ЗАВЕРШИТЬ ЗАБЕГ?</h2>' +
+    '<p>Забег будет завершён. Результат можно занести в зал славы.</p>' +
+    '<div id="endrun-stats" class="end-stats"></div>' +
+    '<input id="endrun-inp" maxlength="24" placeholder="Имя для зала славы">' +
+    '<div class="center">' +
+    '<button id="endrun-save" class="cbtn grn">🏆 В рейтинг и в меню</button>' +
+    '<button id="endrun-cancel" class="cbtn ghost">Отмена</button>' +
+    '</div>' +
+    '</div>';
+
+  document.body.appendChild(o);
+
+  $('#endrun-cancel').onclick = function(){
+    closeOvl('ovl-end-run');
+  };
+
+  $('#endrun-save').onclick = function(){
+    var btnSave = this;
+
+    if (!G || !G.hero) return;
+
+    var inp = $('#endrun-inp');
+    var name = inp ? inp.value.trim() : '';
+
+    name = name || getUser() || 'Аноним';
+
+    setUser(name);
+
+    btnSave.disabled = true;
+    btnSave.textContent = '⏳ Сохраняю...';
+
+    var score = (typeof calcScore === 'function') ? calcScore() : 0;
+    var floor = G.floor || 1;
+
+    var promise;
+
+    if (typeof saveScoreAsync === 'function') {
+      promise = saveScoreAsync(name, score, floor);
+    } else {
+      if (typeof saveScore === 'function') {
+        saveScore(name, score, floor);
+      }
+      promise = Promise.resolve();
+    }
+
+    promise.then(function(){
+      try {
+        if (G.enemy) G.enemy.dead = true;
+      } catch(e) {}
+
+      G.busy = false;
+      G.phase = 'over';
+
+      clearRun();
+
+      closeOvl('ovl-end-run');
+
+      show('scr-menu');
+
+      if (typeof renderScoresAsync === 'function') {
+        renderScoresAsync();
+      }
+
+      if (typeof checkSave === 'function') {
+        checkSave();
+      }
+
+      var c = $('#btn-continue');
+      if (c) c.style.display = 'none';
+
+      updateEndRunButton();
+    });
+  };
+
+  return o;
+}
+
+function openEndRunModal(){
+  if (typeof G === 'undefined' || !G.hero) return;
+
+  if (G.phase === 'menu' || G.phase === 'over') return;
+
+  /* Нельзя открывать, если уже открыта важная модалка */
+  if (uiAnyLockedOpen()) return;
+
+  var o = ensureEndRunModal();
+
+  var h = G.hero;
+  var score = (typeof calcScore === 'function') ? calcScore() : 0;
+
+  var stats = $('#endrun-stats');
+
+  if (stats) {
+    stats.innerHTML =
+      '<div>🏰 Этаж<br><b>' + G.floor + '</b></div>' +
+      '<div>💀 Побед<br><b>' + G.kills + '</b></div>' +
+      '<div>💰 Золото<br><b>' + G.gold + '</b></div>' +
+      '<div>⭐ Уровень<br><b>' + h.level + '</b></div>' +
+      '<div class="big">ОЧКИ: ' + score + '</div>';
+  }
+
+  var inp = $('#endrun-inp');
+  if (inp) {
+    inp.value = getUser() || '';
+  }
+
+  var btnSave = $('#endrun-save');
+  if (btnSave) {
+    btnSave.disabled = false;
+    btnSave.textContent = '🏆 В рейтинг и в меню';
+  }
+
+  o.classList.add('on');
+}
+
+/* ============================================
+Инициализация
+============================================ */
 function init(){
   if (typeof initTooltip === 'function') {
     initTooltip();
   }
+
+  /* Помечаем важные оверлеи как заблокированные */
+  UI_LOCKED_OVLS.forEach(function(id){
+    var o = $('#' + id);
+    if (o) o.dataset.locked = '1';
+  });
 
   var hasSave = checkSave();
 
@@ -28,7 +232,7 @@ function init(){
     btnContinue.style.display = hasSave ? 'inline-block' : 'none';
   }
 
-  /* --- Кнопки меню --- */
+  /* === Кнопки меню === */
   var btnStart = $('#btn-start');
   if (btnStart) {
     btnStart.onclick = function(){
@@ -42,7 +246,10 @@ function init(){
   if (btnContinue) {
     btnContinue.onclick = function(){
       if (loadRun()) {
+        /* Защита от зависшего состояния */
         G.busy = false;
+
+        if (typeof ac === 'function') ac();
         if (typeof sfx !== 'undefined' && sfx.click) sfx.click();
 
         show('scr-game');
@@ -52,11 +259,11 @@ function init(){
         if (typeof renderElixirs === 'function') renderElixirs();
 
         if (G.phase === 'combat') {
-          var actionsEl = $('#actions');
-          if (actionsEl) actionsEl.classList.remove('hidden');
+          var act = $('#actions');
+          if (act) act.classList.remove('hidden');
 
-          var elixirsEl = $('#elixirs');
-          if (elixirsEl) elixirsEl.classList.remove('hidden');
+          var elx = $('#elixirs');
+          if (elx) elx.classList.remove('hidden');
 
           if (typeof updateActions === 'function') updateActions();
         } else if (G.phase === 'doors') {
@@ -89,7 +296,7 @@ function init(){
     };
   }
 
-  /* --- Сложность --- */
+  /* === Сложность === */
   var diffs = $('#diffs');
   if (diffs) {
     diffs.addEventListener('click', function(e){
@@ -106,13 +313,13 @@ function init(){
     });
   }
 
-  /* --- Вход --- */
+  /* === Вход === */
   var btnLogin = $('#btn-login');
   if (btnLogin) {
     btnLogin.onclick = function(){
       if (getUser()) {
-        localStorage.removeItem('kcigames_user');
-        renderScoresAsync();
+        localStorage.removeItem(LU_USER);
+        if (typeof renderScoresAsync === 'function') renderScoresAsync();
       } else {
         openOvl('ovl-login');
         setTimeout(function(){
@@ -131,7 +338,7 @@ function init(){
 
       if (n) {
         setUser(n);
-        renderScoresAsync();
+        if (typeof renderScoresAsync === 'function') renderScoresAsync();
         closeOvl('ovl-login');
       }
     };
@@ -144,7 +351,7 @@ function init(){
     };
   }
 
-  /* --- Туториал --- */
+  /* === Туториал === */
   var btnTut = $('#btn-tutorial');
   if (btnTut) {
     btnTut.onclick = function(){
@@ -174,7 +381,7 @@ function init(){
     };
   }
 
-  /* --- Бестиарий --- */
+  /* === Бестиарий === */
   var btnBest = $('#btn-bestiary');
   if (btnBest) {
     btnBest.onclick = function(){
@@ -191,7 +398,7 @@ function init(){
     };
   }
 
-  /* --- Инвентарь --- */
+  /* === Инвентарь === */
   var btnInv = $('#btn-inv');
   if (btnInv) {
     btnInv.onclick = function(){
@@ -200,23 +407,32 @@ function init(){
     };
   }
 
-  /* --- Закрытие модалок --- */
-  $$('.ovl [data-close]').forEach(function(b){
-    b.addEventListener('click', function(){
-      var ovl = b.closest('.ovl');
-      if (ovl) ovl.classList.remove('on');
-    });
+  /* === Закрытие модалок через [data-close] ===
+     Но важные модалки закрыть нельзя */
+  document.addEventListener('click', function(e){
+    var b = e.target.closest('[data-close]');
+    if (!b) return;
+
+    var ovl = b.closest('.ovl');
+    if (!ovl) return;
+
+    if (uiIsLocked(ovl.id) || ovl.dataset.locked) return;
+
+    ovl.classList.remove('on');
   });
 
-  $$('.ovl').forEach(function(o){
-    o.addEventListener('click', function(e){
-      if (e.target === o && !o.dataset.locked) {
-        o.classList.remove('on');
-      }
-    });
+  /* === Закрытие модалок кликом по фону ===
+     Но важные модалки закрыть нельзя */
+  document.addEventListener('click', function(e){
+    var o = e.target.closest('.ovl');
+    if (!o || e.target !== o) return;
+
+    if (uiIsLocked(o.id) || o.dataset.locked) return;
+
+    o.classList.remove('on');
   });
 
-  /* --- Навыки --- */
+  /* === Навыки === */
   var btnSkills = $('#btn-skills');
   if (btnSkills) {
     btnSkills.onclick = function(){
@@ -232,7 +448,7 @@ function init(){
     };
   }
 
-  /* --- Лист персонажа --- */
+  /* === Лист персонажа === */
   var btnSheet = $('#btn-sheet');
   if (btnSheet) {
     btnSheet.onclick = function(){
@@ -243,7 +459,7 @@ function init(){
     };
   }
 
-  /* --- Журнал --- */
+  /* === Журнал === */
   var btnLog = $('#btn-log');
   if (btnLog) {
     btnLog.onclick = function(){
@@ -252,7 +468,7 @@ function init(){
     };
   }
 
-  /* --- Бой: клики мышью --- */
+  /* === Бой: клики мышью === */
   var actions = $('#actions');
   if (actions) {
     actions.addEventListener('click', function(e){
@@ -263,7 +479,7 @@ function init(){
     });
   }
 
-  /* --- Финал --- */
+  /* === Финал === */
   var endSaveBtn = $('#end-save');
   if (endSaveBtn) {
     endSaveBtn.onclick = function(){
@@ -273,12 +489,13 @@ function init(){
       n = n || getUser() || 'Аноним';
 
       setUser(n);
+
       endSaveBtn.disabled = true;
       endSaveBtn.textContent = '⏳ Сохраняю...';
 
       saveScoreAsync(n, calcScore(), G.floor).then(function(){
         endSaveBtn.textContent = '✔ Сохранено!';
-        renderScoresAsync();
+        if (typeof renderScoresAsync === 'function') renderScoresAsync();
       });
     };
   }
@@ -303,7 +520,9 @@ function init(){
       closeOvl('ovl-end');
 
       show('scr-menu');
-      renderScoresAsync();
+
+      if (typeof renderScoresAsync === 'function') renderScoresAsync();
+
       checkSave();
 
       var c = $('#btn-continue');
@@ -312,16 +531,15 @@ function init(){
   }
 
   /* ============================================
-  КЛАВИАТУРА
-  Фикс: теперь проверяется disabled кнопки
-  и блокируется автоповтор клавиши
+  Клавиатура
   ============================================ */
   document.addEventListener('keydown', function(e){
-    if (typeof G === 'undefined') return;
-
     var active = document.activeElement;
-    var isTyping = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
+    var isTyping =
+      active &&
+      (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT');
 
+    /* Escape закрывает только необязательные окна */
     if (e.key === 'Escape') {
       if (isTyping) {
         active.blur();
@@ -329,7 +547,7 @@ function init(){
       }
 
       $$('.ovl.on').forEach(function(o){
-        if (['ovl-attrs', 'ovl-cards', 'ovl-quest'].indexOf(o.id) < 0) {
+        if (!uiIsLocked(o.id) && !o.dataset.locked) {
           closeOvl(o.id);
         }
       });
@@ -339,6 +557,7 @@ function init(){
 
     if (isTyping) return;
 
+    /* Инвентарь */
     if (e.key === 'i' || e.key === 'I' || e.key === 'ш' || e.key === 'Ш') {
       if (G.hero && G.phase !== 'over') {
         if (typeof renderInv === 'function') renderInv();
@@ -347,30 +566,33 @@ function init(){
       return;
     }
 
-    function isOn(id){
-      var o = $(id);
-      return o && o.classList.contains('on');
-    }
-
+    /* Enter не должен нажимать кнопки, если открыт важный выбор */
     if (e.key === 'Enter') {
-      if (isOn('#ovl-end') || isOn('#ovl-attrs') || isOn('#ovl-cards') || isOn('#ovl-quest')) {
+      if (
+        uiIsOn('#ovl-end') ||
+        uiIsOn('#ovl-end-run') ||
+        uiIsOn('#ovl-attrs') ||
+        uiIsOn('#ovl-cards') ||
+        uiIsOn('#ovl-quest')
+      ) {
         return;
       }
 
       var n = $('#btn-next');
-      if (n) {
+      if (n && !n.disabled) {
         n.click();
         return;
       }
 
-      var p2 = document.querySelector('#event-layer .ev .cbtn');
+      var p2 = document.querySelector('#event-layer .ev .cbtn:not(:disabled)');
       if (p2) {
         p2.click();
         return;
       }
     }
 
-    if (G.phase !== 'combat' || G.busy) return;
+    /* Боевые клавиши */
+    if (typeof G === 'undefined' || G.phase !== 'combat' || G.busy) return;
 
     /* Защита от зажатой клавиши */
     if (e.repeat) return;
@@ -397,7 +619,7 @@ function init(){
     var a = m[k];
     if (!a) return;
 
-    /* Главное исправление: клавиша не работает, если кнопка на перезарядке */
+    /* фикс: клавиша не работает, если кнопка на перезарядке */
     var btn = document.querySelector('.abtn[data-a="' + a + '"]');
     if (!btn || btn.disabled) return;
 
@@ -406,7 +628,33 @@ function init(){
     onAction(a);
   });
 
-  /* --- Туториал при первом запуске --- */
+  /* ============================================
+  Досрочное завершение забега
+  ============================================ */
+  initEndRunButton();
+
+  /* Следим за сменой экранов, чтобы показывать/скрывать кнопку */
+  var oldShow = window.show;
+  if (typeof oldShow === 'function') {
+    window.show = function(){
+      var result = oldShow.apply(this, arguments);
+      updateEndRunButton();
+      return result;
+    };
+  }
+
+  var oldShowEnd = window.showEnd;
+  if (typeof oldShowEnd === 'function') {
+    window.showEnd = function(){
+      var result = oldShowEnd.apply(this, arguments);
+      updateEndRunButton();
+      return result;
+    };
+  }
+
+  updateEndRunButton();
+
+  /* Туториал при первом запуске */
   if (!localStorage.getItem('kcigames_tut_seen')) {
     localStorage.setItem('kcigames_tut_seen', '1');
 
