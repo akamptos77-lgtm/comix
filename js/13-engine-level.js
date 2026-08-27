@@ -2,8 +2,9 @@
 /* ============================================
 13-ENGINE-LEVEL: опыт, уровни, атрибуты,
 благословения, финал, старт забега
-ФИКС: все герои начинают с ПОЛНЫМ HP
+ФИКС: русские названия атрибутов в логах
 ============================================ */
+var ATTR_RU={str:'СИЛА',agi:'ЛОВКОСТЬ',int:'ИНТЕЛЛЕКТ',vit:'ЖИВУЧЕСТЬ'};
 function gainXp(n){
   var h=G.hero;
   if(!h)return Promise.resolve();
@@ -43,7 +44,7 @@ function chooseAttr(lvl){
         h.stats[k]++;
         if(k==='vit')h.hp=Math.min(pMaxHp(),h.hp+15);
         closeOvl('ovl-attrs');
-        log('🆙 '+k.toUpperCase()+' = '+h.stats[k]);
+        log('🆙 '+(ATTR_RU[k]||k)+': '+h.stats[k]);
         saveRun();
         if(Math.random()<.15){
           chooseCard().then(function(){updateHUD();res();});
@@ -84,13 +85,18 @@ function calcScore(){
   var h=G.hero;if(!h)return 0;
   return G.floor*120+G.kills*15+G.gold+(h.level-1)*60+(G.winBonus?2000:0);
 }
+function getRunTimeText(){
+  if(!G.startTime)return'—';
+  var sec=Math.floor((Date.now()-G.startTime)/1000);
+  return Math.floor(sec/60)+'м '+(sec%60)+'с';
+}
 function showEnd(win){
   G.phase='over';G.busy=false;
   var actions=$('#actions');if(actions)actions.classList.add('hidden');
   var elixirs=$('#elixirs');if(elixirs)elixirs.classList.add('hidden');
   var h=G.hero;if(!h)return;
   var s=calcScore();
-  var emoji=$('#end-emoji');if(emoji)emoji.textContent=win?'🏆':'';
+  var emoji=$('#end-emoji');if(emoji)emoji.textContent=win?'🏆':'💀';
   var title=$('#end-title');
   if(title)title.textContent=win?'ПОБЕДА! ПОЖИРАТЕЛЬ МИРОВ ПАЛ!':'ГЕРОЙ ПАЛ…';
   var stats=$('#end-stats');
@@ -110,11 +116,6 @@ function showEnd(win){
   openOvl('ovl-end');
   clearRun();
 }
-function getRunTimeText(){
-  if(!G.startTime)return'—';
-  var sec=Math.floor((Date.now()-G.startTime)/1000);
-  return Math.floor(sec/60)+'м '+(sec%60)+'с';
-}
 function startRun(k){
   var c=CLASSES[k];
   G.lastClass=k;G.phase='doors';G.busy=false;
@@ -126,7 +127,6 @@ function startRun(k){
     pots:DIFF[G.diff].pots,level:1,xp:0,xpNeed:50,skillCd:0,skillCdMax:c.skill.cd,skillName:c.skill.name,
     defending:false,vamp:0,thorns:0,poison:null,burn:null,dead:false,fx:{lunge:0,hurt:0,death:1},
     owned:[],shopMult:1,dodgePenalty:0,holyWeak:false};
-  /* ФИКС: герой начинает с ПОЛНЫМ HP (макс. HP учитывает Живучесть) */
   G.hero.hp=pMaxHp();
   G.floor=1;G.gold=25;G.kills=0;G.won=false;G.winBonus=false;
   G.enemy=null;G.doors=null;G.companion=null;G.materials={};G.chestsOpened=0;G.shopGoods=null;

@@ -1,17 +1,18 @@
 'use strict';
 /* ============================================
-11-ENGINE-EVENTS: события, ЛАГЕРЬ (крафт +
-реликвия ×2), КУЗНЕЦ (только надетые,
-«уровень предмета»), СУНДУКИ БЕЗ ЛОВУШЕК
-ПРИ УСПЕШНОМ ВЗЛОМЕ
+11-ENGINE-EVENTS: события, СУНДУКИ с тремя
+способами взлома (сила/ловкость/интеллект),
+ЛАГЕРЬ, КУЗНЕЦ. Без английского текста.
 ============================================ */
+/* === МИНИ-ИГРА: ВЗЛОМ ЗАМКА (ловкость) === */
 function lockpickGame(onDone){
   var el=$('#event-layer');
   el.innerHTML='<div class="ev"><h3 class="ev-title">🗝️ ВЗЛОМ ЗАМКА</h3>'+
     '<div class="lock-bar"><div id="lock-pin"></div><div class="lock-zone"></div></div>'+
-    '<p>Останови метку в зелёной зоне — получишь ×2 лут <b>без ловушек</b>!</p>'+
+    '<p>Останови метку в зелёной зоне!</p>'+
     '<button class="cbtn grn" id="lock-stop">СТОП!</button></div>';
-  var pos=0,dir=1,speed=2.2;
+  var pos=0,dir=1;
+  var speed=2.2+Math.min(1.3,G.floor*0.01);
   var pin=$('#lock-pin');
   var iv=setInterval(function(){
     pos+=dir*speed;
@@ -20,35 +21,121 @@ function lockpickGame(onDone){
   },16);
   $('#lock-stop').onclick=function(){clearInterval(iv);onDone(pos>=40&&pos<=60);};
 }
+/* === МИНИ-ИГРА: СИЛОВОЙ ВЗЛОМ (как армрестлинг) === */
+function forceChestGame(onDone){
+  var el=$('#event-layer');
+  var pos=50,done=false;
+  var rate=Math.min(2.4,0.9+G.floor*0.012);
+  el.innerHTML='<div class="ev"><h3 class="ev-title">💪 ВЫЛОМАТЬ СИЛОЙ</h3>'+
+    '<p>Жми! Твоя <b style="color:#2a8a4a">зелёная</b> сторона борется с <b style="color:#c44">красной</b>.</p>'+
+    '<div class="lock-bar" style="max-width:520px;background:#555">'+
+    '<div id="fg-you" style="position:absolute;left:0;top:0;bottom:0;background:var(--grn);width:50%"></div>'+
+    '<div id="fg-foe" style="position:absolute;right:0;top:0;bottom:0;background:var(--red);width:50%"></div>'+
+    '<div id="fg-pin" style="position:absolute;top:0;bottom:0;width:4px;background:var(--ink);left:50%"></div></div>'+
+    '<button class="cbtn grn" id="fg-mash" style="font-size:22px;padding:16px 40px">💪 ЖМИ!</button></div>';
+  function draw(){
+    var y=$('#fg-you'),f=$('#fg-foe'),p=$('#fg-pin');
+    if(y)y.style.width=pos+'%';
+    if(f)f.style.width=(100-pos)+'%';
+    if(p)p.style.left=pos+'%';
+  }
+  function end(win){
+    if(done)return;done=true;clearInterval(iv);
+    onDone(win);
+  }
+  var iv=setInterval(function(){
+    if(done)return;
+    pos-=rate;
+    if(pos<=0){end(false);return;}
+    if(pos>=100){end(true);return;}
+    draw();
+  },90);
+  $('#fg-mash').onclick=function(){
+    if(done)return;
+    pos=Math.min(100,pos+2.5+G.hero.stats.str*0.05);
+    if(pos>=100){end(true);return;}
+    draw();
+  };
+  setTimeout(function(){end(pos>=50);},7000);
+  draw();
+}
+/* === МИНИ-ИГРА: ХИТРОСТЬ (реакция) === */
+function intellectChestGame(onDone){
+  var el=$('#event-layer');
+  var state='wait',done=false;
+  el.innerHTML='<div class="ev"><h3 class="ev-title">🔮 ОТКРЫТЬ ХИТРОСТЬЮ</h3>'+
+    '<p>Жди, когда руны вспыхнут <b>зелёным</b>, и жми! Нажмешь раньше — сработает охрана.</p>'+
+    '<p id="ic-msg" style="font-size:22px;margin:14px 0">…руны мерцают…</p>'+
+    '<button class="cbtn blu" id="ic-btn" style="font-size:22px;padding:16px 40px">🔮 СЕЙЧАС!</button></div>';
+  var msg=$('#ic-msg'),btn=$('#ic-btn');
+  var to=setTimeout(function(){
+    if(done)return;
+    state='go';
+    msg.textContent='🟢 СЕЙЧАС!!!';
+    btn.style.background='var(--grn)';
+    setTimeout(function(){if(!done){done=true;onDone(false);}},800);
+  },1200+Math.random()*2000);
+  btn.onclick=function(){
+    if(done)return;
+    if(state==='wait'){done=true;clearTimeout(to);onDone(false);return;}
+    done=true;onDone(true);
+  };
+}
+/* === Порог характеристики растёт с этажом === */
+function chestStatReq(){return 4+Math.floor(G.floor*0.35);}
+/* === Исход попытки взлома === */
+function chestAttemptResult(ok){
+  if(ok){
+    log('✅ Замок поддался! ×2 лут!');
+    doChestOpen(2,true);
+  }else{
+    log('❌ Не вышло...');
+    if(Math.random()<.5){
+      var dm=ri(6,12)+Math.floor(G.floor/2);
+      G.hero.hp=Math.max(1,G.hero.hp-dm);
+      sfx.hurt();
+      log('💥 Ловушка! −'+dm+' HP');
+      updateHUD();
+    }
+    doChestOpen(1,true);
+  }
+}
+/* === СУНДУК === */
 function openChest(){
   var el=$('#event-layer');
   var locked=Math.random()<0.3;
-  var html='<div class="ev"><h3 class="ev-title">🎁 СУНДУК</h3>'+
-    '<div class="ev-anim anim-bounce">'+(locked?'🔒':'📦')+'</div>'+
-    '<p>'+(locked?'Сундук заперт! Взлом = ×2 лут и без ловушек. Сила = риск мимика.':'Открыть силой? Есть риск мимика!')+'</p>'+
-    '<div class="ev-choices">'+
-    '<button class="cbtn grn" id="chest-open">'+(locked?'💪 Открыть силой (риск)':'📦 Открыть (риск)')+'</button>';
-  if(locked)html+='<button class="cbtn blu" id="chest-pick">🗝️ Взломать (×2 лут, безопасно)</button>';
-  html+='<button class="cbtn ghost" id="chest-leave">Пройти мимо</button></div></div>';
-  el.innerHTML=html;
-  $('#chest-open').onclick=function(){doChestOpen(1,false);};
-  if(locked){
-    $('#chest-pick').onclick=function(){
-      lockpickGame(function(ok){
-        if(ok){log('🗝️ Замок взломан! ×2 лут, без ловушек!');doChestOpen(2,true);}
-        else{log('🗝️ Не вышло... Открываем как есть.');doChestOpen(1,true);}
-      });
-    };
+  if(!locked){
+    el.innerHTML='<div class="ev"><h3 class="ev-title">🎁 СУНДУК</h3>'+
+      '<div class="ev-anim anim-bounce">📦</div><p>Открыть его?</p>'+
+      '<div class="ev-choices">'+
+      '<button class="cbtn grn" id="chest-open">📦 Открыть</button>'+
+      '<button class="cbtn ghost" id="chest-leave">Пройти мимо</button></div></div>';
+    $('#chest-open').onclick=function(){doChestOpen(1,false);};
+    $('#chest-leave').onclick=function(){afterEvent();};
+    return;
   }
+  var req=chestStatReq(),h=G.hero;
+  el.innerHTML='<div class="ev"><h3 class="ev-title">🎁 СУНДУК</h3>'+
+    '<div class="ev-anim anim-bounce">🔒</div>'+
+    '<p>Вы нашли <b>запертый сундук</b>. Попробуете аккуратно взломать или выломать силой?</p>'+
+    '<p style="font-size:12px;opacity:.7">Чем глубже этаж, тем крепче замки.</p>'+
+    '<div class="ev-choices" style="flex-direction:column;gap:8px">'+
+    '<button class="cbtn red" id="chest-force" '+(h.stats.str<req?'disabled':'')+'>💪 Выломать силой (нужно 💪 '+req+')</button>'+
+    '<button class="cbtn blu" id="chest-pick" '+(h.stats.agi<req?'disabled':'')+'>🗝️ Взломать отмычкой (нужно 🏹 '+req+')</button>'+
+    '<button class="cbtn" id="chest-mind" style="background:var(--yel)" '+(h.stats.int<req?'disabled':'')+'>🔮 Открыть хитростью (нужно 🔮 '+req+')</button>'+
+    '<button class="cbtn ghost" id="chest-kick">📦 Сорвать замок (риск!)</button>'+
+    '<button class="cbtn ghost" id="chest-leave">Пройти мимо</button></div></div>';
+  $('#chest-force').onclick=function(){forceChestGame(chestAttemptResult);};
+  $('#chest-pick').onclick=function(){lockpickGame(chestAttemptResult);};
+  $('#chest-mind').onclick=function(){intellectChestGame(chestAttemptResult);};
+  $('#chest-kick').onclick=function(){doChestOpen(1,false);};
   $('#chest-leave').onclick=function(){afterEvent();};
 }
-function doChestOpen(mult,noMimic){
+function doChestOpen(mult,safe){
   G.chestsOpened++;updateQuestProgress('chest');
-  /* Мимик — только при открытии силой */
-  if(!noMimic&&Math.random()<.15){log('⚠️ Это МИМИК!');startCombat('fight',true);return;}
+  if(!safe&&Math.random()<.15){log('⚠️ Это МИМИК!');startCombat('fight',true);return;}
   var r=Math.random(),el=$('#event-layer');
-  /* При взломе ловушек не бывает: ловушка заменяется золотом */
-  if(noMimic&&r>=.85)r=.25;
+  if(safe&&r>=.85)r=.25;
   el.innerHTML='<div class="ev"><h3 class="ev-title">🎁 СУНДУК</h3><div class="ev-anim anim-glow">✨</div><p>Что внутри?..</p></div>';
   sleep(600).then(function(){
     if(r<.3){var g=(ri(15,30)+G.floor*2)*mult;G.gold+=g;sfx.gold();
@@ -66,6 +153,7 @@ function doChestOpen(mult,noMimic){
     var nb=el.querySelector('#btn-next');if(nb)nb.onclick=function(){sfx.click();nextFloor();};
   });
 }
+/* === ЗАГАДКА === */
 function openRiddle(){
   var el=$('#event-layer'),r=pick(RIDDLES),answered=false;
   el.innerHTML='<div class="ev"><h3 class="ev-title">🧩 ЗАГАДКА СТРАННИКА</h3><div class="ev-anim">🧙</div><p style="font-style:italic;font-size:17px">«'+r.q+'»</p><div class="riddle-opts">'+r.a.map(function(ans,i){return'<button class="cbtn riddle-btn" data-idx="'+i+'">'+ans+'</button>';}).join('')+'</div></div>';
@@ -124,7 +212,7 @@ function openRest(){
     updateHUD();saveRun();openRest();
   };
 }
-/* === КРАФТ (в лагере) === */
+/* === КРАФТ === */
 function openCraft(){
   var el=$('#event-layer');
   var recipesHtml=RECIPES.map(function(rec,idx){
@@ -153,7 +241,7 @@ function openCraft(){
   });
   $('#craft-back').onclick=function(){openRest();};
 }
-/* === КУЗНЕЦ: только надетые, «уровень предмета» === */
+/* === КУЗНЕЦ === */
 function itemLevel(it){return (it.tier||0)*3+(it.up||0);}
 function upCost(it){
   var totalUpgrades=itemLevel(it);
@@ -248,10 +336,10 @@ function openLibrary(){
   var cost=30+G.floor,el=$('#event-layer');
   el.innerHTML='<div class="ev"><h3 class="ev-title">📚 БИБЛИОТЕКА</h3><div class="ev-anim">📖</div><div class="ev-choices">'+
     '<button class="cbtn" id="lib-read" '+(G.gold<cost?'disabled':'')+'>+60 опыта ('+cost+'💰)</button>'+
-    '<button class="cbtn grn" id="lib-study" '+(G.gold<cost*2?'disabled':'')+'>+1 INT ('+(cost*2)+'💰)</button>'+
+    '<button class="cbtn grn" id="lib-study" '+(G.gold<cost*2?'disabled':'')+'>+1 к интеллекту ('+(cost*2)+'💰)</button>'+
     '<button class="cbtn ghost" id="lib-leave">Уйти</button></div></div>';
   $('#lib-read').onclick=function(){G.gold-=cost;gainXp(60).then(function(){updateHUD();afterEvent();});};
-  $('#lib-study').onclick=function(){G.gold-=cost*2;G.hero.stats.int++;sfx.mystic();log('🔮 INT: '+G.hero.stats.int);updateHUD();afterEvent();};
+  $('#lib-study').onclick=function(){G.gold-=cost*2;G.hero.stats.int++;sfx.mystic();log('🔮 Интеллект: '+G.hero.stats.int);updateHUD();afterEvent();};
   $('#lib-leave').onclick=function(){afterEvent();};
 }
 function openSkillEvent(){

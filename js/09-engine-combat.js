@@ -1,12 +1,13 @@
 'use strict';
 /* ============================================
-09-ENGINE-COMBAT: бой, стихии оружия, эхо/кактус/
-призрачный шаг, оглушение, понятный лут
+09-ENGINE-COMBAT: бой, стихии оружия,
+эхо/кактус/призрачный шаг, понятный лут,
+ФИКС: баффы героя тикают после ЕГО хода
 ============================================ */
 function calcDmg(atk,def,mult,ign){
   return Math.max(1,Math.round(atk*(mult||1)*rand(.85,1.15)-(ign?0:def*.5)));
 }
-/* --- Удар героя: стихия берётся из ОРУЖИЯ, если оно элементальное --- */
+/* --- Удар героя: стихия берётся из ОРУЖИЯ --- */
 function heroStrike(mult,opts){
   opts=opts||{};var h=G.hero,e=G.enemy;
   if(!e||e.dead)return Promise.resolve();
@@ -30,7 +31,7 @@ function heroStrike(mult,opts){
     if(em>1)addFloat(700,160,'СЛАБОСТЬ!','#7ef29a',20);
     if(em<1)addFloat(700,160,'сопротивление...','#c9c9c9',18);
     return hitEnemy(dmg,{crit:isCrit,word:opts.word,big:opts.big}).then(function(){
-      /* РЕЛИКВИЯ «Эхо Героя»: удар повторяется */
+      /* РЕЛИКВИЯ «Эхо Героя» */
       if(hasRelic('echo')&&!opts.echo&&!e.dead&&Math.random()<.2){
         addFloat(700,150,'🌀 ЭХО!','#b66bff',20);
         return hitEnemy(Math.max(1,Math.round(dmg*.5)),{word:'ЭХО!'});
@@ -157,30 +158,9 @@ function enemyTurn(){
   chain=chain.then(function(){
     if(e.dead||G.phase!=='combat')return;
     e.defending=false;
-    /* ОГЛУШЕНИЕ: враг пропускает ровно столько своих ходов, сколько указано */
-    if(e.stun&&e.stun>0){
-      e.stun--;
-      addFloat(700,190,'💫','#ffd23d');
-      log(e.name+' пропускает ход! (оглушение ещё '+e.stun+')');
-      updateHUD();
-      e.nextAction=decideEnemyAction(e);
-      return sleep(300);
-    }
-    if(e.frozen&&e.frozen>0){
-      e.frozen--;
-      addFloat(700,190,'🧊','#9fd8ff');
-      log(e.name+' заморожен!');
-      updateHUD();
-      e.nextAction=decideEnemyAction(e);
-      return sleep(300);
-    }
-    if(e.tr==='rage'&&!e.raged&&e.hp<e.maxHp*.35){
-      e.raged=true;e.atk=Math.round(e.atk*1.4);
-      addBurst(700,180,'ЯРОСТЬ!','#ff4d5e');
-      log(e.name+' в ярости! (+40% атаки)');
-      sfx.hurt();e.nextAction=decideEnemyAction(e);
-      return sleep(600);
-    }
+    if(e.stun&&e.stun>0){e.stun--;addFloat(700,190,'💫','#ffd23d');log(e.name+' пропускает ход! (оглушение ещё '+e.stun+')');updateHUD();e.nextAction=decideEnemyAction(e);return sleep(300);}
+    if(e.frozen&&e.frozen>0){e.frozen--;addFloat(700,190,'🧊','#9fd8ff');log(e.name+' заморожен!');updateHUD();e.nextAction=decideEnemyAction(e);return sleep(300);}
+    if(e.tr==='rage'&&!e.raged&&e.hp<e.maxHp*.35){e.raged=true;e.atk=Math.round(e.atk*1.4);addBurst(700,180,'ЯРОСТЬ!','#ff4d5e');log(e.name+' в ярости! (+40% атаки)');sfx.hurt();e.nextAction=decideEnemyAction(e);return sleep(600);}
     var action=e.nextAction||'attack';
     if(action==='attack'){e.fx.lunge=.45;sfx.swing();return sleep(190).then(function(){return doEnemyAttack(e,h,1.0,{});});}
     else if(action==='heavy'){addBurst(700,160,'МОЩЬ!','#ff8b4a');return sleep(300).then(function(){e.fx.lunge=.55;sfx.swing();return sleep(220);}).then(function(){return doEnemyAttack(e,h,1.7,{big:true});});}
@@ -202,7 +182,7 @@ function enemyTurn(){
 function doEnemyAttack(e,h,mult,opts){
   if(Math.random()*100<getHeroDodge()){
     addFloat(225,200,'ВЖУХ!','#9fd8ff');log('Уклонение!');
-    /* РЕЛИКВИЯ «Призрачный шаг»: уклонение лечит */
+    /* РЕЛИКВИЯ «Призрачный шаг» */
     if(hasRelic('ghoststep')){
       var gh=Math.max(1,Math.round(pMaxHp()*.03));
       h.hp=Math.min(pMaxHp(),h.hp+gh);
@@ -221,7 +201,7 @@ function doEnemyAttack(e,h,mult,opts){
   fx.shake=(crit||opts.big)?16:10;fx.flash=.25;sfx.hurt();
   addBurst(225,180,opts.word||(crit?'КРИТ!':pick(['АЙ!','ОЙ!','ХРЯСЬ!'])));
   addFloat(225,230,'−'+dmg,'#ff6b7a');addParts(225,240,'#ff6b7a');
-  /* РЕЛИКВИЯ «Кактус-талисман»: обидчик получает сдачу */
+  /* РЕЛИКВИЯ «Кактус-талисман» */
   if(hasRelic('cactus')&&dmg>0&&!e.dead){
     var cd2=Math.max(1,Math.round(dmg*.25));
     e.hp=Math.max(0,e.hp-cd2);
@@ -245,8 +225,14 @@ function onAction(a){
   }
   continueAction(a);
 }
+/* === Цепочка хода: герой → спутник → враг === */
 function continueAction(a){
-  var h=G.hero,e=G.enemy;G.busy=true;updateActions();var chain=Promise.resolve();
+  var h=G.hero,e=G.enemy;G.busy=true;updateActions();
+  /* СНAPSHOT баффов ДО хода героя:
+     новые баффы не списываются в этот же раунд */
+  var buffBefore={};
+  for(var bk in h.buffs)buffBefore[bk]=h.buffs[bk];
+  var chain=Promise.resolve();
   if(a==='atk'){chain=heroStrike(1,{});}
   else if(a==='skill'){
     h.skillCd=h.skillCdMax;
@@ -300,12 +286,20 @@ function continueAction(a){
   }).then(function(){
     if(G.phase!=='combat')return;
     if(h.hp<=0)return defeat();
+    /* БАФФЫ ТИКАЮТ ЗДЕСЬ (после хода героя и врага):
+       списываются только те, что были ДО хода героя.
+       Ярость на 1 ход: выдалась навыком → враг ходит →
+       варвар бьёт с яростью → только потом она списывается. */
+    for(var bk2 in h.buffs){
+      if(h.buffs[bk2]>0&&(buffBefore[bk2]||0)>0)h.buffs[bk2]--;
+    }
     roundEnd();h.defending=false;G.busy=false;updateHUD();updateActions();
   });
 }
 function roundEnd(){
-  var h=G.hero;for(var k in h.buffs)if(h.buffs[k]>0)h.buffs[k]--;
-  if(h.skillCd>0)h.skillCd--;if(h.skill2Cd>0)h.skill2Cd--;
+  var h=G.hero;
+  if(h.skillCd>0)h.skillCd--;
+  if(h.skill2Cd>0)h.skill2Cd--;
   G.round++;
   var bfx=getBiomeFx();
   if(bfx&&bfx.tick&&G.round%3===0){
@@ -329,7 +323,6 @@ function companionAttack(){
     updateHUD();return sleep(300);
   });
 }
-/* --- Победа: ПОНЯТНЫЙ лут с приписками --- */
 function winCombat(){
   var e=G.enemy,h=G.hero;if(!e)return Promise.resolve();
   e.dead=true;sfx.win();var lines=[];

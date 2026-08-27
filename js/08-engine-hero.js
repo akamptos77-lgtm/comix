@@ -1,8 +1,9 @@
 'use strict';
 /* ============================================
 08-ENGINE-HERO: расчёты героя, реликвии,
-хуки новых реликвий + предохранители
+хуки новых реликвий + русские логи баффов
 ============================================ */
+var BUFF_RU={atk:'атака +50%',def:'защита +50%',dodge:'уклонение +25',rage:'ярость +30%',crit:'крит ×2'};
 function hasRelic(id){return G.relics&&G.relics.indexOf(id)>=0;}
 function relicFxSum(key){
   if(typeof RELICS==='undefined'||!G.relics)return 0;
@@ -34,14 +35,12 @@ function pMaxHp(){
   if(hasRelic('berskull'))hp=Math.round(hp*.9);
   return Math.max(1,hp);
 }
-/* «Талисман Азарта»: +15% крит, но −5% уворота; кап 100 */
 function pCrit(){
   var c=G.hero.crit+G.hero.stats.agi*3+eqBonus('crit')+relicFxSum('crit');
   if(hasRelic('gamble'))c+=15;
   if(cardsDone())c+=5;
   return Math.min(100,Math.round(c*10)/10);
 }
-/* кап уворота 65 */
 function pDodge(){
   var d=G.hero.stats.agi*2+eqBonus('dodge')+G.hero.spd*.5+relicFxSum('dodge');
   if(hasRelic('swiftboot'))d+=3;
@@ -51,22 +50,18 @@ function pDodge(){
   if(G.hero.dodgePenalty)d-=G.hero.dodgePenalty;
   return Math.min(65,Math.round(Math.max(0,d)*10)/10);
 }
-/* кап вампиризма 60% */
 function pVamp(){
   var v=G.hero.vamp+eqBonus('vamp')+relicFxSum('vamp')/100;
   if(hasRelic('vamp_heart'))v+=.05;
   return Math.min(.6,Math.round(v*100)/100);
 }
-/* кап силы навыков ×2.5 */
 function pSkillPow(){return Math.min(2.5,1+G.hero.stats.int*.1+relicFxSum('skillPct')/100);}
-/* «Рука Мидаса»: зелья на 15% слабее */
 function pPotionPow(){
   var p=.5+G.hero.stats.int*.05+relicFxSum('potionPct')/100;
   if(hasRelic('midas'))p-=.15;
   return Math.max(.2,p);
 }
 function clampHp(){G.hero.hp=Math.min(G.hero.hp,pMaxHp());}
-/* «Кровавый пакт»: +30% атаки при HP ниже 35% */
 function getHeroAtk(){
   var a=pAtk();
   if(G.hero.buffs.atk>0)a=Math.round(a*1.5);
@@ -82,7 +77,12 @@ function getHeroDef(){
 }
 function getHeroDodge(){return Math.min(80,pDodge()+(G.hero.buffs.dodge>0?25:0));}
 function getHeroCrit(){var c=pCrit();if(G.hero.buffs.crit>0)c*=2;return Math.min(100,c);}
-function buffHero(stat,turns){G.hero.buffs[stat]=Math.max(G.hero.buffs[stat]||0,turns);addFloat(225,180,'⬆','#7ef29a');log('Бафф: '+stat);sfx.mystic();}
+function buffHero(stat,turns){
+  G.hero.buffs[stat]=Math.max(G.hero.buffs[stat]||0,turns);
+  addFloat(225,180,'⬆','#7ef29a');
+  log('⬆ Бафф: '+(BUFF_RU[stat]||stat)+' ('+turns+' х.)');
+  sfx.mystic();
+}
 function cleanseHero(){G.hero.poison=null;G.hero.burn=null;addFloat(225,200,'✨','#7ef29a');log('Негатив снят!');sfx.potion();}
 function shieldHero(){G.hero.shield=true;addFloat(225,200,'🛡','#9fd8ff');log('Щит активен!');sfx.click();}
 function stunEnemy(turns){var e=G.enemy;if(!e)return;if(e.boss)turns=Math.min(1,turns);e.stun=(e.stun||0)+turns;addFloat(700,190,'💫','#ffd23d');log('Враг оглушён на '+turns+' х.!');}
