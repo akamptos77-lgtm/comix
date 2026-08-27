@@ -1,8 +1,6 @@
 'use strict';
-/* ============================================
-12-ENGINE-LOOT: дроп, реликвии БЕЗ лимита +
-МОДАЛКА реликвии, магазин, квесты
-============================================ */
+/* 12-ENGINE-LOOT: дроп только по классу,
+реликвии без лимита, магазин, квесты */
 function dropItem(minRar){
   minRar=minRar||0;var f=G.floor,cls=G.hero.cls;
   if(Math.random()<.08){
@@ -11,9 +9,11 @@ function dropItem(minRar){
     copy.b={};for(var b in cursed.b)copy.b[b]=cursed.b[b];
     copy.up=0;copy.tier=0;copy.cursed=true;return copy;
   }
+  /* Только подходящее классу снаряжение */
   var pool=ITEMS().filter(function(it){return it.f<=f&&it.rar>=minRar&&(!it.cls||it.cls.indexOf(cls)>=0);});
   if(!pool.length)pool=ITEMS().filter(function(it){return it.f<=f&&(!it.cls||it.cls.indexOf(cls)>=0);});
-  if(!pool.length)pool=ITEMS().filter(function(it){return it.f<=f;});
+  /* Если совсем пусто — только универсальные (кольца/амулеты) */
+  if(!pool.length)pool=ITEMS().filter(function(it){return !it.cls;});
   if(!pool.length)pool=ITEMS();
   var weighted=[];pool.forEach(function(it){var w=[5,2,1][it.rar]||1;for(var i=0;i<w;i++)weighted.push(it);});
   var src=pick(weighted);
@@ -24,47 +24,19 @@ function dropItem(minRar){
 function giveItem(it){
   if(G.hero.inv.length>=24){log('🎒 Сумка полна!');return false;}
   G.hero.inv.push(it);
-  log('🎒 Предмет: '+it.i+' '+it.n+' ('+(SLOT_NAME[it.slot]||it.slot)+')'+(it.cursed?' (ПРОКЛЯТО!)':''));
+  log('🎒 Предмет: '+it.i+' '+it.n+(it.cursed?' (ПРОКЛЯТО!)':''));
   saveRun();return true;
 }
 function giveElixir(et){
   var h=G.hero;
   if(h.elixirs.length>=h.elixirCap){log('Ячейки эликсиров полны!');return false;}
-  h.elixirs.push(et);
-  log('🧪 Эликсир: '+ELIXIRS[et].i+' '+ELIXIRS[et].n+' — '+ELIXIRS[et].d);
-  saveRun();return true;
+  h.elixirs.push(et);log('🧪 Эликсир: '+ELIXIRS[et].i+' '+ELIXIRS[et].n);saveRun();return true;
 }
-/* === МОДАЛКА РЕЛИКВИИ (всегда, откуда бы ни выпала) === */
-function showRelicModal(rel){
-  var o=$('#ovl-relic');
-  if(!o){
-    o=document.createElement('div');
-    o.id='ovl-relic';o.className='ovl';
-    o.innerHTML='<div class="panel" style="max-width:440px">'+
-      '<h2 style="font-size:22px">🏺 РЕЛИКВИЯ!</h2>'+
-      '<div id="relic-ico" style="font-size:64px"></div>'+
-      '<h3 id="relic-name" style="margin:6px 0"></h3>'+
-      '<p id="relic-desc" style="font-size:15px;margin:10px 0"></p>'+
-      '<button class="cbtn grn" id="relic-ok">Забрать!</button></div>';
-    document.body.appendChild(o);
-    $('#relic-ok').onclick=function(){o.classList.remove('on');sfx.click();};
-  }
-  $('#relic-ico').textContent=rel.i;
-  $('#relic-name').textContent=rel.n;
-  $('#relic-desc').textContent=rel.d;
-  o.classList.add('on');
-  sfx.mystic();
-}
-/* === РЕЛИКВИИ: без лимита === */
 function giveRelic(rel){
   if(!rel)return false;
   if(!G.relics)G.relics=[];
   if(G.relics.indexOf(rel.id)>=0){G.gold+=60;log('🏺 Дубликат реликвии! +60💰');return false;}
-  G.relics.push(rel.id);
-  log('🏺 РЕЛИКВИЯ: '+rel.i+' '+rel.n+'!');
-  showRelicModal(rel);
-  saveRun();
-  return true;
+  G.relics.push(rel.id);log('🏺 РЕЛИКВИЯ: '+rel.i+' '+rel.n+'!');sfx.mystic();return true;
 }
 function dropRelic(){
   var owned=G.relics||[];
@@ -72,38 +44,32 @@ function dropRelic(){
   if(!pool.length)return null;
   return pick(pool);
 }
+function itemLevel(it){return (it.tier||0)*3+(it.up||0);}
 function bonusTxt(it){
-  var totalUpgrades=(it.tier||0)*3+(it.up||0);
+  var total=itemLevel(it);
   return Object.keys(it.b).map(function(k){
     var base=it.b[k];
     var flat=(k==='vamp')?0.01:Math.max(1,Math.round(base*0.15));
-    var val=Math.round((base+flat*totalUpgrades)*100)/100;
+    var val=Math.round((base+flat*total)*100)/100;
     var names={atk:'⚔️',def:'🛡️',hp:'❤️',crit:'🎯',dodge:'💨',vamp:'🩸'};
     if(k==='vamp')return'+'+Math.round(val*100)+'% вампиризма';
     return'+'+val+(names[k]||k);
-  }).join(' · ')+(it.el?' · '+ELEMENTS[it.el].icon+' стихия':'');
+  }).join(' · ')+(it.el?' · '+ELEMENTS[it.el].icon:'');
 }
 function sellPrice(it){
-  var totalUpgrades=(it.tier||0)*3+(it.up||0);
+  var total=itemLevel(it);
   var basePrice=([8,18,40][it.rar]||8);
-  return Math.round(basePrice*(1+totalUpgrades*0.3));
+  return Math.round(basePrice*(1+total*0.3));
 }
-function getActiveSkill(){
-  if(!G.hero||!G.hero.activeSkill)return null;
-  var book=SKILL_BOOKS[G.hero.cls];
-  for(var i=0;i<book.length;i++)if(book[i].id===G.hero.activeSkill)return book[i];
-  return null;
-}
+function getActiveSkill(){if(!G.hero||!G.hero.activeSkill)return null;var book=SKILL_BOOKS[G.hero.cls];for(var i=0;i<book.length;i++)if(book[i].id===G.hero.activeSkill)return book[i];return null;}
 function grantRandomSkill(){
   var h=G.hero;var book=SKILL_BOOKS[h.cls];
   var locked=book.filter(function(s){return h.skills.indexOf(s.id)<0;});
   if(!locked.length){G.gold+=50;log('Все навыки изучены! +50 золота');return null;}
   var s=pick(locked);h.skills.push(s.id);
   log('📖 Изучен навык «'+s.name+'»!');
-  if(!h.activeSkill)h.activeSkill=s.id;
-  sfx.mystic();saveRun();return s;
+  if(!h.activeSkill)h.activeSkill=s.id;sfx.mystic();saveRun();return s;
 }
-/* === КВЕСТЫ === */
 function updateQuestProgress(type){
   if(!G.quests)return;
   G.quests.forEach(function(q){
@@ -115,11 +81,11 @@ function updateQuestProgress(type){
     if(matched){
       q.progress++;
       if(q.progress>=q.need){
-        log('🎉 КВЕСТ ВЫПОЛНЕН: «'+q.name+'»!');sfx.win();
+        log('🎉 КВЕСТ ВЫПОЛНЕН: '+q.name+'!');sfx.win();
         if(!G.pendingQuests)G.pendingQuests=[];
         G.pendingQuests.push(q);
         setTimeout(flushQuests,700);
-      }else log('📜 Квест «'+q.name+'»: '+q.progress+'/'+q.need);
+      }else log('📜 Квест '+q.name+': '+q.progress+'/'+q.need);
     }
   });
 }
@@ -133,14 +99,12 @@ function showQuestComplete(q){
   var el=$('#quest-content');if(!el)return;
   var rewards=q.rewards||(q.reward?[q.reward]:[{gold:50,item:null}]);
   var rewardsHtml=rewards.map(function(r,i){
-    var label=r.item
-      ?(SLOT_NAME[r.item.slot]||'Предмет')+': '+r.item.i+' '+r.item.n+' <span class="rar-tag">'+RAR[r.item.rar]+'</span>'
-      :'💰 '+r.gold+' золота';
+    var label=r.item?(SLOT_NAME[r.item.slot]||'Предмет')+': '+r.item.i+' '+r.item.n+' <span class="rar-tag">'+RAR[r.item.rar]+'</span>':'💰 '+r.gold+' золота';
     return'<button class="cbtn" data-reward="'+i+'" style="background:var(--yel);margin:4px;font-size:14px">'+label+'</button>';
   }).join('');
   el.innerHTML='<h3 class="ev-title">🎉 КВЕСТ ВЫПОЛНЕН!</h3><div class="ev-anim anim-glow">🏆</div>'+
-    '<p style="font-size:18px"><b>«'+q.name+'»</b></p><p style="font-size:14px;opacity:.8;margin:8px 0">Выбери награду:</p>'+
-    '<div style="display:flex;flex-direction:column;gap:8px;align-items:center">'+rewardsHtml+'</div>';
+   '<p style="font-size:18px"><b>'+q.name+'</b></p><p style="font-size:14px;opacity:.8;margin:8px 0">Выбери награду:</p>'+
+   '<div style="display:flex;flex-direction:column;gap:8px;align-items:center">'+rewardsHtml+'</div>';
   el.querySelectorAll('[data-reward]').forEach(function(b){
     b.onclick=function(){
       var reward=rewards[parseInt(this.dataset.reward,10)];
@@ -158,14 +122,13 @@ function showQuestComplete(q){
     };
   });
 }
-/* === МАГАЗИН === */
-function shopMultNow(){return(G.hero.shopMult||1)*(1+G.floor*0.02);}
+function shopMultNow(){return (G.hero.shopMult||1)*(1+G.floor*0.02);}
 function renderShop(){
   var el=$('#event-layer');if(!G.shopGoods)generateShopGoods();
   var mult=shopMultNow();
-  el.innerHTML='<div class="ev"><h3 class="ev-title">🛒 ЛАВКА</h3><div class="ev-anim">🧙</div><p>Золото: <b>'+G.gold+'</b> 💰 <small>(цены растут с этажом)</small></p><div class="ev-shop">'+
-    G.shopGoods.map(function(s,i){var price=Math.round(s.p*mult);return'<button class="shop-it" data-i="'+i+'" '+(G.gold<price?'disabled':'')+'><span class="si-i">'+s.i+'</span><b>'+s.n+'</b><small>'+s.d+'</small><span class="p">'+price+' 💰</span></button>';}).join('')+
-    '</div><button class="cbtn ghost" id="shop-exit" style="margin-top:10px">Уйти →</button></div>';
+  el.innerHTML='<div class="ev"><h3 class="ev-title">🛒 ЛАВКА</h3><div class="ev-anim">🧙</div><p>Золото: <b>'+G.gold+'</b> 💰</p><div class="ev-shop">'+
+   G.shopGoods.map(function(s,i){var price=Math.round(s.p*mult);return'<button class="shop-it" data-i="'+i+'" '+(G.gold<price?'disabled':'')+'><span class="si-i">'+s.i+'</span><b>'+s.n+'</b><small>'+s.d+'</small><span class="p">'+price+' 💰</span></button>';}).join('')+
+   '</div><button class="cbtn ghost" id="shop-exit" style="margin-top:10px">Уйти →</button></div>';
   el.querySelectorAll('.shop-it').forEach(function(b){
     b.onclick=function(){
       var item=G.shopGoods[parseInt(this.dataset.i,10)];
@@ -195,7 +158,9 @@ function generateShopGoods(){
   G.shopGoods=goods;
 }
 function dropShopItem(){
-  var pool=ITEMS().filter(function(it){return it.f<=Math.min(G.floor+5,100);});
+  var cls=G.hero.cls;
+  var pool=ITEMS().filter(function(it){return it.f<=Math.min(G.floor+5,100)&&(!it.cls||it.cls.indexOf(cls)>=0);});
+  if(!pool.length)pool=ITEMS().filter(function(it){return !it.cls;});
   if(!pool.length)return ITEMS()[0];
   var src=pick(pool);
   var copy={slot:src.slot,i:src.i,n:src.n,rar:src.rar,b:{},up:0,tier:0,cls:src.cls,el:src.el};
