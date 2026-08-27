@@ -1,19 +1,19 @@
 'use strict';
-/* 06-DATA-ITEMS: предметы, проклятия, эликсиры, крафт */
-
+/* 06-DATA-ITEMS: предметы, проклятия, эликсиры, крафт
+   ИСПРАВЛЕНО: битые иконки (' hood', '? ?', пустые),
+   слоты и названия */
 var CURSED_ITEMS=[
 {slot:'weapon',i:'🗡️',n:'Клинок Крови',rar:2,b:{atk:12,vamp:.2},curse:'−20 макс. HP',curseFx:function(h){h.maxHp-=20;h.hp=Math.min(h.hp,pMaxHp());}},
 {slot:'ring',i:'💍',n:'Кольцо Жадности',rar:2,b:{crit:15,atk:5},curse:'+50% цены в лавках',curseFx:function(h){h.shopMult=1.5;}},
 {slot:'armor',i:'🛡️',n:'Доспех Боли',rar:2,b:{def:10,hp:40},curse:'−10% уклонения',curseFx:function(h){h.dodgePenalty=10;}},
 {slot:'amulet',i:'📿',n:'Амулет Тьмы',rar:2,b:{atk:8,crit:8},curse:'Свет наносит тебе −20% урона',curseFx:function(h){h.holyWeak=true;}}
 ];
-
 function ITEMS(){return[
 /* Оружие */
 {slot:'weapon',i:'⚔️',n:'Железный меч',rar:0,f:1,b:{atk:3},cls:['knight']},
 {slot:'weapon',i:'⚔️',n:'Длинный меч',rar:1,f:3,b:{atk:5,crit:2},cls:['knight']},
-{slot:'weapon',i:'⚔️',n:'Пламенный клинок',rar:2,f:7,b:{atk:9,crit:4},el:'fire',cls:['knight']},
-{slot:'weapon',i:'',n:'Дубовый посох',rar:0,f:1,b:{atk:2,crit:2},cls:['mage']},
+{slot:'weapon',i:'🔥',n:'Пламенный клинок',rar:2,f:7,b:{atk:9,crit:4},el:'fire',cls:['knight']},
+{slot:'weapon',i:'🌿',n:'Дубовый посох',rar:0,f:1,b:{atk:2,crit:2},cls:['mage']},
 {slot:'weapon',i:'🔮',n:'Посох молний',rar:1,f:3,b:{atk:4,crit:4},el:'lightning',cls:['mage']},
 {slot:'weapon',i:'🔮',n:'Посох архимага',rar:2,f:7,b:{atk:8,crit:6},el:'fire',cls:['mage']},
 {slot:'weapon',i:'🗡️',n:'Ржавый кинжал',rar:0,f:1,b:{atk:2,crit:3},cls:['rogue']},
@@ -41,21 +41,21 @@ function ITEMS(){return[
 {slot:'armor',i:'🧥',n:'Кожаный плащ',rar:0,f:1,b:{def:2,dodge:3},cls:LEATHERABLE},
 {slot:'armor',i:'🧥',n:'Маскировочный плащ',rar:1,f:3,b:{def:3,dodge:6},cls:LEATHERABLE},
 {slot:'armor',i:'🧥',n:'Плащ убийцы',rar:2,f:7,b:{def:5,dodge:9,crit:3},cls:['rogue','archer']},
-{slot:'armor',i:'🦺',n:'Меховой жилет',rar:0,f:1,b:{def:2,hp:15},cls:['barbarian']},
-{slot:'armor',i:'🦺',n:'Доспех вождя',rar:2,f:7,b:{def:6,hp:45,crit:4},cls:['barbarian']},
+{slot:'armor',i:'🧥',n:'Меховой жилет',rar:0,f:1,b:{def:2,hp:15},cls:['barbarian']},
+{slot:'armor',i:'🧥',n:'Доспех вождя',rar:2,f:7,b:{def:6,hp:45,crit:4},cls:['barbarian']},
 /* Шлемы */
 {slot:'helmet',i:'⛑️',n:'Кожаный шлем',rar:0,f:1,b:{def:1,hp:5}},
 {slot:'helmet',i:'⛑️',n:'Стальной шлем',rar:1,f:3,b:{def:3,hp:10},cls:['knight','barbarian']},
 {slot:'helmet',i:'⛑️',n:'Рогатый шлем',rar:2,f:7,b:{def:5,hp:20,atk:2},cls:['barbarian']},
 {slot:'helmet',i:'🎩',n:'Остроконечная шляпа',rar:1,f:3,b:{def:1,crit:4},cls:ROBABLE},
 {slot:'helmet',i:'🌸',n:'Венок из цветов',rar:1,f:3,b:{def:1,crit:3,dodge:3},cls:['fairy']},
-{slot:'helmet',i:' hood',n:'Капюшон тени',rar:1,f:3,b:{def:2,dodge:4},cls:['rogue','archer']},
-{slot:'helmet',i:'🥽',n:'Гогглы изобретателя',rar:1,f:3,b:{def:2,crit:4},cls:['inventor']},
+{slot:'helmet',i:'🌑',n:'Капюшон тени',rar:1,f:3,b:{def:2,dodge:4},cls:['rogue','archer']},
+{slot:'helmet',i:'👓',n:'Гогглы изобретателя',rar:1,f:3,b:{def:2,crit:4},cls:['inventor']},
 /* Ботинки */
 {slot:'boots',i:'👢',n:'Кожаные ботинки',rar:0,f:1,b:{dodge:2,spd:1}},
 {slot:'boots',i:'👢',n:'Сапоги странника',rar:1,f:3,b:{dodge:4,spd:2}},
 {slot:'boots',i:'👢',n:'Ботинки тени',rar:2,f:7,b:{dodge:7,spd:3,crit:2}},
-{slot:'boots',i:'🥾',n:'Латные сапоги',rar:1,f:3,b:{def:2,dodge:1},cls:['knight','barbarian']},
+{slot:'boots',i:'👢',n:'Латные сапоги',rar:1,f:3,b:{def:2,dodge:1},cls:['knight','barbarian']},
 {slot:'boots',i:'👟',n:'Лёгкие туфельки',rar:1,f:3,b:{dodge:5,crit:2},cls:['fairy','rogue','archer']},
 /* Перчатки */
 {slot:'gloves',i:'🧤',n:'Кожаные перчатки',rar:0,f:1,b:{atk:1,crit:1}},
@@ -80,7 +80,6 @@ function ITEMS(){return[
 {slot:'amulet',i:'⚙️',n:'Шестерёнка удачи',rar:1,f:4,b:{crit:5,dodge:3}},
 {slot:'amulet',i:'💎',n:'Кристалл силы',rar:2,f:7,b:{atk:4,crit:4}}
 ];}
-
 var ELIXIRS={
 stun:{i:'💫',n:'Оглушающая бомба',d:'Оглушает 2 хода',el:'physical'},
 freeze:{i:'🧊',n:'Ледяная колба',d:'Урон льдом + оглушение',el:'ice'},
@@ -89,7 +88,6 @@ poison:{i:'☠️',n:'Ядовитый флакон',d:'Отравляет 3 х�
 heal:{i:'❤️',n:'Эликсир жизни',d:'Лечит 40% HP',el:'holy'},
 thunder:{i:'⚡',n:'Громовой камень',d:'Большой урон молнией',el:'lightning'}
 };
-
 var RECIPES=[
 {id:'c_sword',i:'⚔️',n:'Кованый меч',slot:'weapon',rar:1,b:{atk:8,crit:3},mats:{'Гоблинское ухо':3,'Костяная пыль':2},desc:'+8 атаки, +3% крит'},
 {id:'c_staff',i:'🔮',n:'Посох стихий',slot:'weapon',rar:1,b:{atk:7,crit:5},mats:{'Эктоплазма':3,'Совиное перо':2},desc:'+7 атаки, +5% крит'},
@@ -100,9 +98,9 @@ var RECIPES=[
 {id:'c_wand',i:'✨',n:'Жезл природы',slot:'weapon',rar:1,b:{atk:7,crit:4},mats:{'Болотная слизь':3,'Слизь':2},desc:'+7 атаки, +4% крит'},
 {id:'c_chain',i:'🛡️',n:'Укреплённая кольчуга',slot:'armor',rar:1,b:{def:5,hp:20},mats:{'Костяная пыль':4,'Гоблинское ухо':2},desc:'+5 защиты, +20 HP'},
 {id:'c_cloak',i:'🧥',n:'Плащ разведчика',slot:'armor',rar:1,b:{def:4,dodge:6},mats:{'Рваный плащ':3,'Волчья шкура':2},desc:'+4 защиты, +6% уворот'},
-{id:'c_fur',i:'🦺',n:'Меховая броня',slot:'armor',rar:1,b:{def:5,hp:25},mats:{'Волчья шкура':4,'Гнилая плоть':2},desc:'+5 защиты, +25 HP'},
+{id:'c_fur',i:'🧥',n:'Меховая броня',slot:'armor',rar:1,b:{def:5,hp:25},mats:{'Волчья шкура':4,'Гнилая плоть':2},desc:'+5 защиты, +25 HP'},
 {id:'c_helm',i:'⛑️',n:'Кованый шлем',slot:'helmet',rar:1,b:{def:4,hp:15},mats:{'Каменное ядро':3,'Костяная пыль':2},desc:'+4 защиты, +15 HP'},
-{id:'c_hood',i:'',n:'Капюшон следопыта',slot:'helmet',rar:1,b:{def:3,dodge:4},mats:{'Рваный плащ':3,'Совиное перо':2},desc:'+3 защиты, +4% уворот'},
+{id:'c_hood',i:'🌑',n:'Капюшон следопыта',slot:'helmet',rar:1,b:{def:3,dodge:4},mats:{'Рваный плащ':3,'Совиное перо':2},desc:'+3 защиты, +4% уворот'},
 {id:'c_boots',i:'👢',n:'Сапоги ветра',slot:'boots',rar:1,b:{dodge:5,spd:3},mats:{'Волчья шкура':3,'Крыло мыши':2},desc:'+5% уворот, +3 скорость'},
 {id:'c_gloves',i:'🧤',n:'Перчатки воина',slot:'gloves',rar:1,b:{atk:4,def:2},mats:{'Гоблинское ухо':3,'Каменная кожа':2},desc:'+4 атаки, +2 защита'},
 {id:'c_ring',i:'💍',n:'Кольцо стихий',slot:'ring',rar:1,b:{crit:6,hp:15},mats:{'Эктоплазма':3,'Уголёк':2},desc:'+6% крит, +15 HP'},
@@ -118,5 +116,4 @@ var RECIPES=[
 {id:'c_epic7',i:'⛑️',n:'Корона Хаоса',slot:'helmet',rar:2,b:{atk:6,crit:8,hp:25},mats:{'Осколок хаоса':2,'Демоническое сердце':1,'Королевская слизь':2},desc:'+6 атаки, +8% крит, +25 HP'},
 {id:'c_epic8',i:'🧤',n:'Рукавицы Пожирателя',slot:'gloves',rar:2,b:{atk:8,crit:6,vamp:.08},mats:{'Осколок мира':1,'Демоническое сердце':1,'Теневой клинок':2},desc:'+8 атаки, +6% крит, +8% вамп'}
 ];
-
 var ALL_MATS=['Слизь','Крыло мыши','Гоблинское ухо','Костяная пыль','Эктоплазма','Гнилая плоть','Рваный плащ','Волчья шкура','Паучий шёлк','Совиное перо','Живая древесина','Болотная слизь','Трясинный мох','Змеиная чешуя','Каменная кожа','Коготь гарпии','Каменное ядро','Уголёк','Пепельная чешуя','Застывшая лава','Ледяной клык','Вечный снег','Ледяной осколок','Демонический рог','Теневой клинок','Осколок души','Пустотный камень','Шёпот бездны','Осколок хаоса','Королевская слизь','Некротический фолиант','Золотая цепь','Шёлк королевы','Сердце болота','Ядро колосса','Сердце пламени','Ледяная корона','Демоническое сердце','Осколок мира'];
