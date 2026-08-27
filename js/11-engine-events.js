@@ -1,5 +1,10 @@
 'use strict';
-/* 11-ENGINE-EVENTS: события + КУЗНИЦА (крафт/улучшение), ЦЕЛИТЕЛЬ, ТОРГОВЕЦ РЕЛИКВИЯМИ */
+/* ============================================
+11-ENGINE-EVENTS: события, ЛАГЕРЬ (крафт +
+реликвия ×2 за покупку), КУЗНЕЦ (отдельная
+дверь: только улучшение надетых, бесконечное)
+============================================ */
+
 /* === ВЗЛОМ ЗАМКА === */
 function lockpickGame(onDone){
   var el=$('#event-layer');
@@ -81,23 +86,27 @@ function openRiddle(){
   });
 }
 
-/* === ПРИВАЛ === */
+/* === ЛАГЕРЬ: отдых, тренировка, КРАФТ, целитель, реликвия ×2 === */
+function relicCampCost(){
+  return Math.round(250*Math.pow(2,G.relicBuys||0));
+}
+
 function openRest(){
   var el=$('#event-layer');
   var healCost=25+G.floor*2;
-  var relicCost=250+G.floor*2;
-  el.innerHTML='<div class="ev"><h3 class="ev-title">🔥 ПРИВАЛ</h3>'+
+  var relicCost=relicCampCost();
+  el.innerHTML='<div class="ev"><h3 class="ev-title">🔥 ЛАГЕРЬ</h3>'+
     '<div class="ev-anim anim-glow">🏕️</div><p>Костёр потрескивает... Золото: <b>'+G.gold+'</b>💰</p>'+
     '<div class="ev-choices">'+
     '<button class="cbtn grn" id="rest-heal">😴 Отдых +35% HP</button>'+
     '<button class="cbtn red" id="rest-train">🏋️ Тренировка +2 атаки</button>'+
-    '<button class="cbtn blu" id="rest-craft">⚒️ Кузница</button>'+
+    '<button class="cbtn blu" id="rest-craft">⚒️ Крафт</button>'+
     '<button class="cbtn grn" id="rest-doc" '+((G.gold<healCost||G.hero.hp>=pMaxHp())?'disabled':'')+'>⚕️ Целитель ('+healCost+'💰)</button>'+
     '<button class="cbtn" id="rest-relic" style="background:var(--yel)" '+(G.gold<relicCost?'disabled':'')+'>🏺 Реликвия ('+relicCost+'💰)</button>'+
     '</div></div>';
   $('#rest-heal').onclick=function(){healHero(.35);log('Отдых!');afterEvent();};
   $('#rest-train').onclick=function(){G.hero.atk+=2;sfx.gold();log('+2 атаки!');afterEvent();};
-  $('#rest-craft').onclick=function(){openSmith('craft');};
+  $('#rest-craft').onclick=function(){openCraft();};
   $('#rest-doc').onclick=function(){
     var cost=25+G.floor*2;
     if(G.gold<cost)return;
@@ -106,103 +115,95 @@ function openRest(){
     updateHUD();saveRun();openRest();
   };
   $('#rest-relic').onclick=function(){
-    var cost=250+G.floor*2;
+    var cost=relicCampCost();
     if(G.gold<cost)return;
     var rel=dropRelic();
     if(!rel){log('У торговца больше нет реликвий!');return;}
-    G.gold-=cost;giveRelic(rel);
+    G.gold-=cost;
+    G.relicBuys=(G.relicBuys||0)+1;
+    giveRelic(rel);
     sfx.mystic();updateHUD();saveRun();openRest();
   };
 }
 
-/* ============================================
-КУЗНИЦА: НОВАЯ СИСТЕМА ПРОКАЧКИ
-Бесконечная, фикса, префиксы каждые 3
-============================================ */
+/* === КРАФТ (только в лагере) === */
+function openCraft(){
+  var el=$('#event-layer');
+  var recipesHtml=RECIPES.map(function(rec,idx){
+    var canCraft=true;
+    var matsStr=Object.keys(rec.mats).map(function(m){
+      var have=G.materials[m]||0,need=rec.mats[m];
+      if(have<need)canCraft=false;
+      return'<span style="color:'+(have>=need?'#2a8a4a':'#c44')+'">'+m+' '+have+'/'+need+'</span>';
+    }).join(' · ');
+    return'<div class="bag-item rar'+rec.rar+'"><b>'+rec.i+' '+rec.n+' <span class="rar-tag">'+RAR[rec.rar]+'</span></b><span>'+rec.desc+'</span><small>'+matsStr+'</small><div class="bag-actions"><button class="cbtn small grn" data-craft="'+idx+'" '+(!canCraft?'disabled':'')+'>⚒️ Создать</button></div></div>';
+  }).join('');
+  el.innerHTML='<div class="ev" style="max-width:720px"><h3 class="ev-title">⚒️ КРАФТ</h3>'+
+    '<p style="font-size:13px;opacity:.8;margin-bottom:10px">Собери ингредиенты и создай предмет!</p>'+
+    '<div class="bag-row" style="max-height:300px;overflow-y:auto">'+recipesHtml+'</div>'+
+    '<button class="cbtn ghost" id="craft-back" style="margin-top:14px">← Назад</button></div>';
+  el.querySelectorAll('[data-craft]').forEach(function(b){
+    b.onclick=function(){
+      var rec=RECIPES[parseInt(this.dataset.craft,10)];
+      for(var m in rec.mats){if((G.materials[m]||0)<rec.mats[m]){log('Не хватает ингредиентов!');return;}}
+      for(var m2 in rec.mats){G.materials[m2]-=rec.mats[m2];}
+      var item={slot:rec.slot,i:rec.i,n:rec.n,rar:rec.rar,b:{},up:0,tier:0};
+      for(var b2 in rec.b)item.b[b2]=rec.b[b2];
+      giveItem(item);sfx.smith();log('⚒️ Создано: '+rec.i+' '+rec.n+'!');
+      updateHUD();openCraft();
+    };
+  });
+  $('#craft-back').onclick=function(){openRest();};
+}
+
+/* === КУЗНЕЦ: отдельная дверь, только НАДЕТЫЕ предметы === */
 function upCost(it){
   var totalUpgrades=(it.tier||0)*3+(it.up||0);
   return Math.round((40+it.rar*40)+totalUpgrades*25);
 }
 
-function openCraft(){openSmith('craft');}
-
-function openSmith(tab){
-  var el=$('#event-layer'),h=G.hero;
-  var tabs='<div style="display:flex;gap:8px;justify-content:center;margin:0 0 12px">'+
-    '<button class="cbtn small" id="smith-craft" style="'+(tab==='craft'?'background:var(--yel)':'background:#fff')+'">⚒️ Крафт</button>'+
-    '<button class="cbtn small" id="smith-up" style="'+(tab==='up'?'background:var(--yel)':'background:#fff')+'">🔨 Улучшение</button></div>';
-
-  if(tab==='craft'){
-    var recipesHtml=RECIPES.map(function(rec,idx){
-      var canCraft=true;
-      var matsStr=Object.keys(rec.mats).map(function(m){
-        var have=G.materials[m]||0,need=rec.mats[m];
-        if(have<need)canCraft=false;
-        return'<span style="color:'+(have>=need?'#2a8a4a':'#c44')+'">'+m+' '+have+'/'+need+'</span>';
-      }).join(' · ');
-      return'<div class="bag-item rar'+rec.rar+'"><b>'+rec.i+' '+rec.n+' <span class="rar-tag">'+RAR[rec.rar]+'</span></b><span>'+rec.desc+'</span><small>'+matsStr+'</small><div class="bag-actions"><button class="cbtn small grn" data-craft="'+idx+'" '+(!canCraft?'disabled':'')+'>⚒️ Создать</button></div></div>';
-    }).join('');
-    el.innerHTML='<div class="ev" style="max-width:720px"><h3 class="ev-title">⚒️ КУЗНИЦА</h3>'+tabs+
-      '<p style="font-size:13px;opacity:.8;margin-bottom:10px">Собери ингредиенты и создай предмет!</p>'+
-      '<div class="bag-row" style="max-height:300px;overflow-y:auto">'+recipesHtml+'</div>'+
-      '<button class="cbtn ghost" id="smith-back" style="margin-top:14px">← Назад</button></div>';
-    el.querySelectorAll('[data-craft]').forEach(function(b){
-      b.onclick=function(){
-        var rec=RECIPES[parseInt(this.dataset.craft,10)];
-        for(var m in rec.mats){if((G.materials[m]||0)<rec.mats[m]){log('Не хватает ингредиентов!');return;}}
-        for(var m2 in rec.mats){G.materials[m2]-=rec.mats[m2];}
-        var item={slot:rec.slot,i:rec.i,n:rec.n,rar:rec.rar,b:{},up:0,tier:0};
-        for(var b2 in rec.b)item.b[b2]=rec.b[b2];
-        giveItem(item);sfx.smith();log('⚒️ Создано: '+rec.i+' '+rec.n+'!');
-        updateHUD();openSmith('craft');
-      };
-    });
-  }else{
-    /* УЛУЧШЕНИЕ: бесконечное, фикса, префиксы */
-    var rows='';
-    for(var sl in h.equip){
-      var it=h.equip[sl];
-      if(it)rows+=upRow(it,'eq:'+sl,'Надето');
-    }
-    h.inv.forEach(function(it,i){rows+=upRow(it,'bag:'+i,'В сумке');});
-    el.innerHTML='<div class="ev" style="max-width:720px"><h3 class="ev-title">🔨 УЛУЧШЕНИЕ</h3>'+tabs+
-      '<p style="font-size:13px;opacity:.8;margin-bottom:10px">Каждое улучшение даёт <b>фиксированный бонус</b>. Каждые <b>3 улучшения</b> → префикс <b>+1</b>. Прокачка <b>бесконечна</b>! Золото: <b>'+G.gold+'</b>💰</p>'+
-      '<div class="bag-row" style="max-height:300px;overflow-y:auto">'+(rows||'<p class="hint">Нет предметов для улучшения.</p>')+'</div>'+
-      '<button class="cbtn ghost" id="smith-back" style="margin-top:14px">← Назад</button></div>';
-    el.querySelectorAll('[data-up]').forEach(function(b){
-      b.onclick=function(){
-        var key=this.dataset.up,it=null;
-        if(key.indexOf('eq:')===0){it=h.equip[key.slice(3)];}
-        else{it=h.inv[parseInt(key.slice(4),10)];}
-        if(!it)return;
-        var c=upCost(it);
-        if(G.gold<c)return;
-        G.gold-=c;
-        it.up=(it.up||0)+1;
-        if(it.up>=3){
-          it.up=0;
-          it.tier=(it.tier||0)+1;
-          sfx.smith();log('🔨 '+it.i+' '+it.n+' получил префикс +'+it.tier+'!');
-        }else{
-          sfx.smith();log('🔨 '+it.i+' '+it.n+' улучшен ('+it.up+'/3)');
-        }
-        updateHUD();saveRun();openSmith('up');
-      };
-    });
-  }
-  $('#smith-craft').onclick=function(){openSmith('craft');};
-  $('#smith-up').onclick=function(){openSmith('up');};
-  $('#smith-back').onclick=function(){openRest();};
-}
-
 function upRow(it,key,where){
   var c=upCost(it);
-  var tierPrefix=it.tier>0?' <span class="up-tag" style="color:#8a1eff;font-size:14px">+'+it.tier+'</span>':'';
-  var upInfo=it.up>0?' ('+it.up+'/3)':'';
+  var tierPrefix=(it.tier||0)>0?' <span class="up-tag" style="color:#8a1eff">+'+it.tier+'</span>':'';
+  var upInfo=(it.up||0)>0?' ('+it.up+'/3)':'';
   return'<div class="bag-item rar'+it.rar+'"><b>'+it.i+' '+it.n+tierPrefix+upInfo+' <span class="rar-tag">'+RAR[it.rar]+'</span></b>'+
     '<span>'+bonusTxt(it)+'</span><small>'+where+'</small>'+
     '<div class="bag-actions"><button class="cbtn small grn" data-up="'+key+'"'+((G.gold<c)?' disabled':'')+'>'+
     '🔨 Улучшить ('+c+'💰)</button></div></div>';
+}
+
+function openForge(){
+  var el=$('#event-layer'),h=G.hero;
+  var rows='';
+  for(var sl in h.equip){
+    var it=h.equip[sl];
+    if(it)rows+=upRow(it,'eq:'+sl,SLOT_NAME[sl]||sl);
+  }
+  el.innerHTML='<div class="ev" style="max-width:720px"><h3 class="ev-title">🔨 КУЗНЕЦ — УЛУЧШЕНИЕ</h3>'+
+    '<p style="font-size:13px;opacity:.8;margin-bottom:10px">Улучшаются только <b>надетые</b> предметы. Бонусы — <b>фикс</b>. Каждые <b>3 улучшения</b> → префикс <b>+1</b>. Прокачка <b>бесконечна</b>! Золото: <b>'+G.gold+'</b>💰</p>'+
+    '<div class="bag-row" style="max-height:300px;overflow-y:auto">'+(rows||'<p class="hint">Нет надетых предметов для улучшения.</p>')+'</div>'+
+    '<button class="cbtn ghost" id="forge-back" style="margin-top:14px">← Уйти</button></div>';
+  el.querySelectorAll('[data-up]').forEach(function(b){
+    b.onclick=function(){
+      var key=this.dataset.up;
+      if(key.indexOf('eq:')!==0)return;
+      var it=h.equip[key.slice(3)];
+      if(!it)return;
+      var c=upCost(it);
+      if(G.gold<c)return;
+      G.gold-=c;
+      it.up=(it.up||0)+1;
+      if(it.up>=3){
+        it.up=0;
+        it.tier=(it.tier||0)+1;
+        sfx.smith();log('🔨 '+it.i+' '+it.n+' получил префикс +'+it.tier+'!');
+      }else{
+        sfx.smith();log('🔨 '+it.i+' '+it.n+' улучшен ('+it.up+'/3)');
+      }
+      updateHUD();saveRun();openForge();
+    };
+  });
+  $('#forge-back').onclick=function(){afterEvent();};
 }
 
 /* === ФОНТАН === */
@@ -220,7 +221,7 @@ function openFount(){
   $('#f-fish').onclick=function(){goFishing();};
 }
 
-/* === ОСТАЛЬНЫЕ СОБЫТИЯ === */
+/* === АЛТАРЬ === */
 function openShrine(){
   var el=$('#event-layer');
   el.innerHTML='<div class="ev"><h3 class="ev-title">🕯️ АЛТАРЬ</h3><div class="ev-anim anim-glow">🕯️</div><div class="ev-choices">'+
@@ -232,6 +233,7 @@ function openShrine(){
   $('#sh-leave').onclick=function(){afterEvent();};
 }
 
+/* === ЛОВУШКА === */
 function openTrap(){
   var dodgeChance=Math.min(.85,.4+G.hero.stats.agi*.04);
   if(Math.random()<dodgeChance){sfx.click();log('🕸️ Уклонился!');}
@@ -239,6 +241,7 @@ function openTrap(){
   updateHUD();afterEvent();
 }
 
+/* === ТАВЕРНА === */
 function openTavern(){
   var el=$('#event-layer');
   el.innerHTML='<div class="ev"><h3 class="ev-title">🍺 ТАВЕРНА</h3><div class="ev-anim anim-glow">🍺</div><div class="ev-choices">'+
@@ -250,6 +253,7 @@ function openTavern(){
   $('#tv-leave').onclick=function(){afterEvent();};
 }
 
+/* === БИБЛИОТЕКА === */
 function openLibrary(){
   var cost=30+G.floor,el=$('#event-layer');
   el.innerHTML='<div class="ev"><h3 class="ev-title">📚 БИБЛИОТЕКА</h3><div class="ev-anim">📖</div><div class="ev-choices">'+
@@ -261,6 +265,7 @@ function openLibrary(){
   $('#lib-leave').onclick=function(){afterEvent();};
 }
 
+/* === САНКТИЛИЙ === */
 function openSkillEvent(){
   var el=$('#event-layer');
   el.innerHTML='<div class="ev"><h3 class="ev-title">📖 САНКТИЛИЙ</h3><div class="ev-anim anim-glow">📖</div><p>Изучить навык?</p><div class="ev-choices"><button class="cbtn grn" id="sk-learn">📖 Изучить</button><button class="cbtn ghost" id="sk-leave">Уйти</button></div></div>';
@@ -270,11 +275,12 @@ function openSkillEvent(){
 
 function showSkillLearned(s){
   var el=$('#event-layer');
-  el.innerHTML='<div class="ev"><h3 class="ev-title">📖 НОВЫЙ НАВЫК!</h3><div style="font-size:48px">'+s.icon+'</div><div class="loot"><div><b>'+s.name+'</b></div><div style="font-size:14px">'+s.desc+'</div></div><button class="cbtn" id="btn-next" style="background:var(--yel)">Дальше ▼</button></div>';
+  el.innerHTML='<div class="ev"><h3 class="ev-title">📖 НОВЫЙ НАВЫК!</h3><div style="font-size:48px">'+s.icon+'</div><div class="loot"><div><b>Навык «'+s.name+'»</b></div><div style="font-size:14px">'+s.desc+'</div></div><button class="cbtn" id="btn-next" style="background:var(--yel)">Дальше ▼</button></div>';
   saveRun();
   $('#btn-next').onclick=function(){sfx.click();nextFloor();};
 }
 
+/* === СПУТНИК === */
 function openCompanionEvent(){
   var el=$('#event-layer'),opts=[COMPANIONS.knight,COMPANIONS.wolf,COMPANIONS.fairy_c],comp=pick(opts);
   var scenarios={knight:'Ты находишь рыцаря, придавленного обломками.',wolf:'Волк попал в капкан и скулит.',fairy_c:'Раненая фея лежит у дороги.'};
@@ -285,6 +291,7 @@ function openCompanionEvent(){
   $('#comp-ignore').onclick=function(){afterEvent();};
 }
 
+/* === МАНЕКЕН === */
 function openDummy(){
   var el=$('#event-layer');
   el.innerHTML='<div class="ev"><h3 class="ev-title">🥊 МАНЕКЕН</h3><div class="ev-anim anim-shake">🥊</div><div class="ev-choices"><button class="cbtn" id="dm-atk" style="background:var(--yel)">⚔️ +2 атаки</button><button class="cbtn" id="dm-def" style="background:var(--yel)">🛡️ +2 защиты</button><button class="cbtn ghost" id="dm-leave">Уйти</button></div></div>';
@@ -293,6 +300,7 @@ function openDummy(){
   $('#dm-leave').onclick=function(){afterEvent();};
 }
 
+/* === ПРОКЛЯТОЕ ЗОЛОТО === */
 function openCursed(){
   var amt=ri(30,60)+G.floor*2,el=$('#event-layer');
   el.innerHTML='<div class="ev"><h3 class="ev-title">💰 ПРОКЛЯТОЕ ЗОЛОТО</h3><div class="ev-anim anim-glow">💰</div><p>Груда ('+amt+'💰), но проклята...</p><div class="ev-choices"><button class="cbtn red" id="cg-take">💰 Взять (риск)</button><button class="cbtn ghost" id="cg-leave">Не трогать</button></div></div>';
