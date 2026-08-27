@@ -1,13 +1,12 @@
 'use strict';
-/* 21-UI-PANELS: бестиарий, лист, навыки, туториал, выбор героя */
-function panelEscape(s){
-  return String(s==null?'':s).replace(/[&<>"']/g,function(c){
-    return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
-  });
-}
-function panelSkillDamage(pow,hits){
-  if(typeof skillDmgPreview==='function')return skillDmgPreview(pow,hits);
-  return Math.round(getHeroAtk()*(pow||1)*(hits||1)*pSkillPow());
+/* ============================================
+21-UI-PANELS: бестиарий, лист (уровни предметов,
+реликвии без /3), навыки, туториал, выбор героя
+============================================ */
+function itemLvl21(it){return (it.tier||0)*3+(it.up||0);}
+function lvlTag21(it){
+  var l=itemLvl21(it);
+  return l>0?' <span class="up-tag">ур.'+l+'</span>':'';
 }
 /* === БЕСТИАРИЙ === */
 function renderBestiary(){
@@ -28,19 +27,19 @@ function renderBestiary(){
     if(!seen){
       return'<div class="best-card locked"><div class="bi">❓</div><b>???</b><p>Сразись с этим врагом...</p></div>';
     }
-    return'<div class="best-card"><div class="bi">'+getMonsterIcon(m.id)+'</div><b>'+panelEscape(m.name)+'</b>'+elemLabel(m.el)+
+    return'<div class="best-card"><div class="bi">'+getMonsterIcon(m.id)+'</div><b>'+m.name+'</b>'+elemLabel(m.el)+
       '<div style="margin-top:4px">'+
       (m.weak?'<span class="elem" style="background:#3ecf6f;color:#171022">слабость: '+ELEMENTS[m.weak].icon+' '+ELEMENTS[m.weak].name+'</span>':'')+
       (m.resist?'<span class="elem" style="background:#ff8b94;color:#171022">устойчив: '+ELEMENTS[m.resist].icon+' '+ELEMENTS[m.resist].name+'</span>':'')+
-      '</div><p>'+panelEscape(m.desc)+'</p><p style="font-size:10px;opacity:.6">🃏 Побед: '+kills+'</p></div>';
+      '</div><p>'+m.desc+'</p><p style="font-size:10px;opacity:.6">🃏 Побед: '+kills+'</p></div>';
   }).join('');
 }
-/* === ЛИСТ ПЕРСОНАЖА (РЕЛИКВИИ БЕЗ /3) === */
+/* === ЛИСТ ПЕРСОНАЖА === */
 function renderSheet(){
   var h=G.hero;if(!h)return;
   var el=$('#sheet-content');if(!el)return;
   var stat=function(tip,label,val){
-    return'<div class="sheet-stat" data-tip="'+panelEscape(tip)+'"><span>'+label+'</span><b>'+val+'</b></div>';
+    return'<div class="sheet-stat" data-tip="'+tip+'"><span>'+label+'</span><b>'+val+'</b></div>';
   };
   var relicsHtml='';
   if(G.relics&&G.relics.length){
@@ -49,7 +48,7 @@ function renderSheet(){
         var rel=null;
         for(var i=0;i<RELICS.length;i++)if(RELICS[i].id===rid){rel=RELICS[i];break;}
         if(!rel)return'';
-        return'<div class="relic-chip" data-tip="'+panelEscape(rel.d)+'">'+rel.i+' '+panelEscape(rel.n)+'</div>';
+        return'<div class="relic-chip" data-tip="'+rel.d+'">'+rel.i+' '+rel.n+'</div>';
       }).join('')+'</div>';
   }
   el.innerHTML='<div class="sheet-grid">'+
@@ -57,8 +56,8 @@ function renderSheet(){
     stat('Текущее и максимальное здоровье.','❤️ HP',Math.round(h.hp)+'/'+pMaxHp())+
     stat('Базовый урон героя.','⚔️ Атака',pAtk())+
     stat('Уменьшает входящий урон.','🛡️ Защита',pDef())+
-    stat('Шанс критического удара.','🎯 Крит',pCrit()+'%')+
-    stat('Шанс уклониться от удара.','💨 Уклонение',pDodge()+'%')+
+    stat('Шанс критического удара (×1.8 урона).','🎯 Крит',pCrit()+'%')+
+    stat('Шанс полностью уклониться от удара.','💨 Уклонение',pDodge()+'%')+
     stat('Лечит % от нанесённого урона.','🩸 Вампиризм',Math.round(pVamp()*100)+'%')+
     stat('Влияет на побег и уклонение.','👟 Скорость',h.spd)+
     stat('Общий уровень героя.','⭐ Уровень',h.level)+
@@ -66,16 +65,18 @@ function renderSheet(){
     '</div>'+
     '<div class="sheet-sec"><h3>💪 АТРИБУТЫ</h3>'+
     stat('+2 к атаке за единицу.','💪 Сила',h.stats.str)+
-    stat('+3% крит и +2% уклонение.','🏹 Ловкость',h.stats.agi)+
-    stat('+10% урон навыков, +5% зелья.','🔮 Интеллект',h.stats.int)+
+    stat('+3% крит и +2% уклонение за единицу.','🏹 Ловкость',h.stats.agi)+
+    stat('+10% к урону навыков и +5% к зельям за единицу.','🔮 Интеллект',h.stats.int)+
     stat('+15 макс. HP за единицу.','❤️ Живучесть',h.stats.vit)+
     '</div>'+
     '<div class="sheet-sec"><h3>🎽 ЭКИПИРОВКА</h3>'+
     ['weapon','armor','helmet','boots','gloves','ring1','ring2','amulet'].map(function(sl){
       var it=h.equip[sl];
-      var tip=it?it.n+': '+bonusTxt(it)+(it.cursed?'. ПРОКЛЯТО: '+it.curse:''):SLOT_NAME[sl]+': пусто';
-      var val=it?it.i+' '+it.n+((it.tier||0)>0?' +'+it.tier:(it.up?' +'+it.up:'')):'—';
-      return stat(tip,SLOT_NAME[sl],val);
+      return stat(
+        it?it.n+': '+bonusTxt(it)+(it.cursed?'. ПРОКЛЯТО: '+it.curse:'')+'. Уровень предмета: '+itemLvl21(it):SLOT_NAME[sl]+': пусто',
+        SLOT_NAME[sl],
+        it?it.i+' '+it.n+lvlTag21(it):'—'
+      );
     }).join('')+
     '</div>'+
     relicsHtml+
@@ -90,10 +91,10 @@ function renderSkillBook(){
   var h=G.hero;if(!h)return;
   var book=SKILL_BOOKS[h.cls];
   var base=CLASSES[h.cls].skill;
-  var baseDmg=base.pow?panelSkillDamage(base.pow,base.hits):0;
+  var baseDmg=base.pow?skillDmgPreview(base.pow,base.hits):0;
   var baseTip=base.name+': '+base.desc+(base.pow?' · Урон: ~'+baseDmg:'');
-  $('#base-skill').innerHTML='<div class="fate-card" style="cursor:default;background:#fff3b8" data-tip="'+panelEscape(baseTip)+'">'+
-    '<div class="fc-i">'+h.icon+'</div><b>'+panelEscape(base.name)+'</b>'+panelEscape(base.desc)+
+  $('#base-skill').innerHTML='<div class="fate-card" style="cursor:default;background:#fff3b8" data-tip="'+baseTip+'">'+
+    '<div class="fc-i">'+h.icon+'</div><b>'+base.name+'</b>'+base.desc+
     (base.pow?'<br><small>Урон: ~'+baseDmg+'</small>':'')+
     '<br><small>КД: '+base.cd+'</small></div>';
   var unlocked=h.skills;
@@ -103,13 +104,13 @@ function renderSkillBook(){
     if(!s)return'';
     var active=h.activeSkill===id;
     var tip=s.name+': '+s.desc+
-      (s.pow?' · Урон: ~'+panelSkillDamage(s.pow,s.hits):'')+
+      (s.pow?' · Урон: ~'+skillDmgPreview(s.pow,s.hits):'')+
       (s.heal?' · Лечение: +'+Math.round(pMaxHp()*s.heal)+' HP':'');
-    var dmgLine=s.pow?'<br><small>Урон: ~'+panelSkillDamage(s.pow,s.hits)+'</small>':
+    var dmgLine=s.pow?'<br><small>Урон: ~'+skillDmgPreview(s.pow,s.hits)+'</small>':
       s.heal?'<br><small>Лечение: +'+Math.round(pMaxHp()*s.heal)+' HP</small>':'';
-    return'<button class="fate-card" data-sk="'+id+'" data-tip="'+panelEscape(tip)+'" style="'+
+    return'<button class="fate-card" data-sk="'+id+'" data-tip="'+tip+'" style="'+
       (active?'background:#d8f0d8;border-color:#2a8a4a':'')+'">'+
-      '<div class="fc-i">'+s.icon+'</div><b>'+panelEscape(s.name)+'</b>'+panelEscape(s.desc)+dmgLine+'<br>'+
+      '<div class="fc-i">'+s.icon+'</div><b>'+s.name+'</b>'+s.desc+dmgLine+'<br>'+
       '<small>КД: '+s.cd+(s.el?' '+elemLabel(s.el):'')+(active?' · ✔':'')+'</small></button>';
   }).join(''):'<p class="hint">Навыки не изучены. Ищи их в 📖 Санктилиях и у боссов!</p>';
   $('#skill-list').querySelectorAll('[data-sk]').forEach(function(b){
@@ -118,15 +119,16 @@ function renderSkillBook(){
       var s=null;
       for(var i=0;i<book.length;i++)if(book[i].id===h.activeSkill){s=book[i];break;}
       if(s)log('Выбран навык: '+s.icon+' «'+s.name+'»');
-      if(typeof sfx!=='undefined'&&sfx.click)sfx.click();
-      renderSkillBook();updateHUD();
-      if(typeof updateActions==='function')updateActions();
+      sfx.click();
+      renderSkillBook();updateHUD();updateActions();
     };
   });
 }
 /* === ОБУЧЕНИЕ === */
 function showTutorial(){
-  tutStep=0;renderTut();openOvl('ovl-tutorial');
+  tutStep=0;
+  renderTut();
+  openOvl('ovl-tutorial');
 }
 function renderTut(){
   var s=TUTORIAL[tutStep];if(!s)return;
@@ -142,17 +144,14 @@ function renderHeroCards(){
   el.innerHTML=Object.keys(CLASSES).map(function(k){
     var c=CLASSES[k];
     return'<button class="panel hero-card" data-k="'+k+'">'+
-      '<div class="hc-ico">'+c.icon+'</div><h3>'+panelEscape(c.name)+'</h3>'+
-      '<p class="hc-desc">'+panelEscape(c.desc)+'</p>'+
+      '<div class="hc-ico">'+c.icon+'</div><h3>'+c.name+'</h3>'+
+      '<p class="hc-desc">'+c.desc+'</p>'+
       '<div class="hc-stats"><span>❤️'+c.hp+'</span><span>⚔️'+c.atk+'</span><span>🛡'+c.def+'</span><span>🎯'+c.crit+'%</span></div>'+
       '<div class="hc-stats"><span>💪'+c.stats.str+'</span><span>🏹'+c.stats.agi+'</span><span>🔮'+c.stats.int+'</span><span>❤️'+c.stats.vit+'</span></div>'+
-      '<div class="hc-skill">✨ <b>'+panelEscape(c.skill.name)+'</b><br>'+panelEscape(c.skill.desc)+'</div>'+
+      '<div class="hc-skill">✨ <b>'+c.skill.name+'</b><br>'+c.skill.desc+'</div>'+
       '</button>';
   }).join('');
   el.querySelectorAll('.hero-card').forEach(function(b){
-    b.onclick=function(){
-      if(typeof sfx!=='undefined'&&sfx.click)sfx.click();
-      startRun(this.dataset.k);
-    };
+    b.onclick=function(){sfx.click();startRun(this.dataset.k);};
   });
 }

@@ -1,37 +1,18 @@
 'use strict';
 /* ============================================
-09-ENGINE-COMBAT: бой + реликвии +
-НЕЛИНЕЙНОЕ МАСШТАБИРОВАНИЕ ВРАГОВ +
-МУТАЦИИ В БЕСКОНЕЧНОМ РЕЖИМЕ
+09-ENGINE-COMBAT: бой, стихии оружия, эхо/кактус/
+призрачный шаг, оглушение, понятный лут
 ============================================ */
 function calcDmg(atk,def,mult,ign){
   return Math.max(1,Math.round(atk*(mult||1)*rand(.85,1.15)-(ign?0:def*.5)));
 }
-
-/* === РЕЛИКВИИ === */
-function giveRelic(rel){
-  if(!rel)return false;
-  if(!G.relics)G.relics=[];
-  if(G.relics.indexOf(rel.id)>=0){G.gold+=60;log('🏺 Дубликат реликвии! +60💰');return false;}
-  if(G.relics.length>=3){G.gold+=100;log('🏺 '+rel.n+' не поместился! +100💰');return false;}
-  G.relics.push(rel.id);
-  log('🏺 РЕЛИКВИЯ: '+rel.i+' '+rel.n+'!');
-  sfx.mystic();
-  return true;
-}
-function dropRelic(){
-  var owned=G.relics||[];
-  var pool=RELICS.filter(function(r){return owned.indexOf(r.id)<0;});
-  if(!pool.length)return null;
-  return pick(pool);
-}
-
-/* --- Удар героя --- */
+/* --- Удар героя: стихия берётся из ОРУЖИЯ, если оно элементальное --- */
 function heroStrike(mult,opts){
   opts=opts||{};var h=G.hero,e=G.enemy;
   if(!e||e.dead)return Promise.resolve();
   var projType=opts.proj||CLASSES[h.cls].projType;
-  var el=opts.el||CLASSES[h.cls].el||'physical';
+  var w=h.equip?h.equip.weapon:null;
+  var el=opts.el||(w&&w.el?w.el:(CLASSES[h.cls].el||'physical'));
   var chain=Promise.resolve();
   if(projType){chain=chain.then(function(){return fireProjectile(projType,260,290,700,300);});}
   else{chain=chain.then(function(){h.fx.lunge=.45;sfx.swing();return sleep(190);});}
@@ -40,7 +21,7 @@ function heroStrike(mult,opts){
     var isCrit=opts.crit||Math.random()*100<getHeroCrit()+(opts.bonusCrit||0);
     var em=elemMult(el,e);
     var bfx=getBiomeFx();
-    if(bfx&&bfx.elem===el)em*=bfx.mult;
+    if(bfx&&bfx.elem===el)em=bfx.mult;
     var dmg=calcDmg(getHeroAtk(),e.def,mult*pSkillPow()*em,opts.ignoreDef);
     var critMult=(bfx&&bfx.critMult)?bfx.critMult:1.8;
     if(isCrit)dmg=Math.round(dmg*critMult);
@@ -48,11 +29,16 @@ function heroStrike(mult,opts){
     if(e.defending)dmg=Math.max(1,Math.round(dmg*.5));
     if(em>1)addFloat(700,160,'СЛАБОСТЬ!','#7ef29a',20);
     if(em<1)addFloat(700,160,'сопротивление...','#c9c9c9',18);
-    return hitEnemy(dmg,{crit:isCrit,word:opts.word,big:opts.big});
+    return hitEnemy(dmg,{crit:isCrit,word:opts.word,big:opts.big}).then(function(){
+      /* РЕЛИКВИЯ «Эхо Героя»: удар повторяется */
+      if(hasRelic('echo')&&!opts.echo&&!e.dead&&Math.random()<.2){
+        addFloat(700,150,'🌀 ЭХО!','#b66bff',20);
+        return hitEnemy(Math.max(1,Math.round(dmg*.5)),{word:'ЭХО!'});
+      }
+    });
   });
   return chain;
 }
-
 function hitEnemy(dmg,opts){
   var e=G.enemy;if(!e||e.dead)return Promise.resolve();
   e.hp=Math.max(0,e.hp-dmg);if(e.hp<=0)e.dead=true;
@@ -65,66 +51,37 @@ function hitEnemy(dmg,opts){
   if(opts.crit&&Math.random()<.35)enemyReact(['Ай, больно же!','Да как ты посмел!','Это не честно!']);
   updateHUD();return sleep(260);
 }
-
-/* ============================================
-СОЗДАНИЕ ВРАГА: НЕЛИНЕЙНЫЙ РОСТ
-Этажи 1-50: обычный рост
-Этажи 51-100: +1.5% за этаж к множителю
-Этажи 101+: +2.5% за этаж к множителю
-Циклы: +60% за каждый цикл
-============================================ */
 function makeEnemy(base,kind,isMimic){
   var dm=DIFF[G.diff],f=G.floor,cycle=G.cycle||0;
   var cycleMult=1+cycle*0.6;
   var boss=kind==='boss'||kind==='final',elite=kind==='elite';
-
-  /* Нелинейный рост HP */
   var hpScale=1+0.06*(f-1);
   if(f>50)hpScale+=(f-50)*0.015;
   if(f>100)hpScale+=(f-100)*0.025;
-
-  /* Нелинейный рост атаки */
   var atkScale=1+0.035*(f-1);
   if(f>50)atkScale+=(f-50)*0.01;
   if(f>100)atkScale+=(f-100)*0.02;
-
-  /* Нелинейный рост защиты */
   var defScale=1+0.03*(f-1);
   if(f>50)defScale+=(f-50)*0.008;
-  if(f>100)defScale+=(f-100)*0.015;
-
   var hpM=hpScale*(boss?1.4:1)*(elite?1.4:1)*dm.hp*cycleMult;
   var atkM=atkScale*(boss?1.1:1)*(elite?1.2:1)*dm.atk*cycleMult;
   var defM=defScale*(elite?1.15:1)*cycleMult;
-
-  /* Мутации в бесконечном режиме */
-  var mutation=null;
-  if(cycle>0&&!isMimic){
-    var mutPool=['regen','thorns','vampiric','enraged','shielded'];
-    if(Math.random()<0.3+cycle*0.1){
-      mutation=pick(mutPool);
-    }
-  }
-
   if(isMimic){
-    return{id:'mimic',name:'Мимик',boss:false,elite:false,tr:null,ai:'melee',el:'physical',
-      weak:'fire',resist:null,
-      hp:Math.round(60*hpM),maxHp:Math.round(60*hpM),
-      atk:Math.round(20*atkM),def:Math.round(5*defM),
-      spd:8,crit:8,
-      gold:Math.round(40*(1+.08*f)*cycleMult),
-      xp:Math.round(50*(1+.1*f)*cycleMult),
-      scale:1,dodge:.1,raged:false,stun:0,poison:null,burn:null,frozen:0,
-      defending:false,nextAction:null,dead:false,mutation:null,
+    return{id:'mimic',name:'Мимик',boss:false,elite:false,tr:null,ai:'melee',el:'physical',weak:'fire',resist:null,
+      hp:Math.round(60*hpM),maxHp:Math.round(60*hpM),atk:Math.round(20*atkM),def:Math.round(5*defM),
+      spd:8,crit:8,gold:Math.round(40*(1+.08*f)*cycleMult),xp:Math.round(50*(1+.1*f)*cycleMult),
+      scale:1,dodge:.1,raged:false,stun:0,poison:null,burn:null,frozen:0,defending:false,nextAction:null,dead:false,mutation:null,
       fx:{lunge:0,hurt:0,death:1,enter:1}};
   }
-
+  var mutation=null;
+  if(cycle>0&&Math.random()<0.3+cycle*0.1){
+    mutation=pick(['regen','thorns','vampiric','enraged','shielded']);
+  }
   var mutName='';
   if(mutation){
     var mutNames={regen:'♻️',thorns:'🌵',vampiric:'🩸',enraged:'💢',shielded:'🛡️'};
     mutName=(mutNames[mutation]||'')+' ';
   }
-
   var e={id:base.id,name:mutName+base.name+(cycle>0?' +'+cycle:''),
     boss:boss,elite:elite,final:kind==='final',
     tr:base.tr||null,ai:base.ai||'basic',el:base.el||'physical',
@@ -135,21 +92,13 @@ function makeEnemy(base,kind,isMimic){
     gold:Math.round(base.gold*(1+.08*(f-1))*dm.gold*(elite?1.8:1)*(boss?1.5:1)*cycleMult),
     xp:Math.round(base.xp*(1+.1*(f-1))*(elite?1.8:1)*(boss?1.6:1)*cycleMult),
     scale:boss?1.28:elite?1.12:1,dodge:base.tr==='swift'?.22:0,
-    raged:false,stun:0,poison:null,burn:null,frozen:0,
-    defending:false,nextAction:null,dead:false,
-    mutation:mutation,
-    fx:{lunge:0,hurt:0,death:1,enter:1}};
-  e.maxHp=e.hp;
-  e.nextAction=decideEnemyAction(e);
-  unlockBestiary(e.id);
-
-  /* Мутация: бонусы */
-  if(mutation==='enraged'){e.atk=Math.round(e.atk*1.3);}
-  if(mutation==='shielded'){e.def=Math.round(e.def*1.5);}
-
+    raged:false,stun:0,poison:null,burn:null,frozen:0,defending:false,nextAction:null,dead:false,
+    mutation:mutation,fx:{lunge:0,hurt:0,death:1,enter:1}};
+  e.maxHp=e.hp;e.nextAction=decideEnemyAction(e);unlockBestiary(e.id);
+  if(mutation==='enraged')e.atk=Math.round(e.atk*1.3);
+  if(mutation==='shielded')e.def=Math.round(e.def*1.5);
   return e;
 }
-
 function decideEnemyAction(e){
   var ai=e.ai||'basic',pool;
   if(ai==='basic')pool=[{a:'attack',w:80},{a:'heavy',w:10},{a:'defend',w:10}];
@@ -164,7 +113,6 @@ function decideEnemyAction(e){
   for(var i=0;i<pool.length;i++){cur+=pool[i].w;if(roll<cur)return pool[i].a;}
   return'attack';
 }
-
 function startCombat(kind,isMimic){
   var f=G.floor,base;
   if(isMimic){G.enemy=makeEnemy(null,kind,true);}
@@ -174,36 +122,18 @@ function startCombat(kind,isMimic){
     var pool=ENEMY_POOL.filter(function(e){return e.tier===tier;});
     if(!pool.length)pool=ENEMY_POOL;
     if(kind==='elite'){var ep=pool.filter(function(e){return e.tier>=Math.max(1,tier-1);});if(ep.length)pool=ep;}
-    base=pick(pool);
-    G.enemy=makeEnemy(base,kind,false);
+    base=pick(pool);G.enemy=makeEnemy(base,kind,false);
   }
   G.phase='combat';G.busy=false;G.round=0;
   $('#event-layer').innerHTML='';$('#actions').classList.remove('hidden');renderElixirs();
   var e=G.enemy;var t=e.boss?(e.final?'☠ ФИНАЛЬНЫЙ БОСС':'👑 БОСС'):e.elite?'⭐ ЭЛИТА':'⚔️ Бой';
-  var mutTxt=e.mutation?' · МУТАЦИЯ: '+e.mutation:'';
-  log(t+': '+e.name+(e.weak?' · слаб к '+ELEMENTS[e.weak].icon:'')+mutTxt);
+  log(t+': '+e.name+(e.weak?' · слаб к '+ELEMENTS[e.weak].icon:''));
   updateHUD();updateActions();
 }
-
-/* --- Мутация: регенерация --- */
-function applyMutations(){
-  var e=G.enemy;
-  if(!e||e.dead)return;
-  if(e.mutation==='regen'&&!e.dead){
-    var heal=Math.max(1,Math.round(e.maxHp*0.03));
-    e.hp=Math.min(e.maxHp,e.hp+heal);
-    addFloat(700,200,'+'+heal,'#7ef29a',18);
-  }
-}
-
 function enemyTurn(){
   var h=G.hero,e=G.enemy;
   if(!e||e.dead)return Promise.resolve();
   var chain=Promise.resolve();
-
-  /* Мутация: регенерация в начале хода врага */
-  applyMutations();
-
   if(e.poison&&e.poison.turns>0){
     chain=chain.then(function(){
       e.hp=Math.max(0,e.hp-e.poison.dmg);e.poison.turns--;
@@ -227,9 +157,30 @@ function enemyTurn(){
   chain=chain.then(function(){
     if(e.dead||G.phase!=='combat')return;
     e.defending=false;
-    if(e.stun&&e.stun>0){e.stun--;addFloat(700,190,'💫','#ffd23d');log(e.name+' пропускает ход!');updateHUD();e.nextAction=decideEnemyAction(e);return sleep(300);}
-    if(e.frozen&&e.frozen>0){e.frozen--;addFloat(700,190,'🧊','#9fd8ff');log(e.name+' заморожен!');updateHUD();e.nextAction=decideEnemyAction(e);return sleep(300);}
-    if(e.tr==='rage'&&!e.raged&&e.hp<e.maxHp*.35){e.raged=true;e.atk=Math.round(e.atk*1.4);addBurst(700,180,'ЯРОСТЬ!','#ff4d5e');log(e.name+' в ярости!');sfx.hurt();e.nextAction=decideEnemyAction(e);return sleep(600);}
+    /* ОГЛУШЕНИЕ: враг пропускает ровно столько своих ходов, сколько указано */
+    if(e.stun&&e.stun>0){
+      e.stun--;
+      addFloat(700,190,'💫','#ffd23d');
+      log(e.name+' пропускает ход! (оглушение ещё '+e.stun+')');
+      updateHUD();
+      e.nextAction=decideEnemyAction(e);
+      return sleep(300);
+    }
+    if(e.frozen&&e.frozen>0){
+      e.frozen--;
+      addFloat(700,190,'🧊','#9fd8ff');
+      log(e.name+' заморожен!');
+      updateHUD();
+      e.nextAction=decideEnemyAction(e);
+      return sleep(300);
+    }
+    if(e.tr==='rage'&&!e.raged&&e.hp<e.maxHp*.35){
+      e.raged=true;e.atk=Math.round(e.atk*1.4);
+      addBurst(700,180,'ЯРОСТЬ!','#ff4d5e');
+      log(e.name+' в ярости! (+40% атаки)');
+      sfx.hurt();e.nextAction=decideEnemyAction(e);
+      return sleep(600);
+    }
     var action=e.nextAction||'attack';
     if(action==='attack'){e.fx.lunge=.45;sfx.swing();return sleep(190).then(function(){return doEnemyAttack(e,h,1.0,{});});}
     else if(action==='heavy'){addBurst(700,160,'МОЩЬ!','#ff8b4a');return sleep(300).then(function(){e.fx.lunge=.55;sfx.swing();return sleep(220);}).then(function(){return doEnemyAttack(e,h,1.7,{big:true});});}
@@ -248,9 +199,17 @@ function enemyTurn(){
   });
   return chain;
 }
-
 function doEnemyAttack(e,h,mult,opts){
-  if(Math.random()*100<getHeroDodge()){addFloat(225,200,'ВЖУХ!','#9fd8ff');log('Уклонение!');updateHUD();return sleep(300);}
+  if(Math.random()*100<getHeroDodge()){
+    addFloat(225,200,'ВЖУХ!','#9fd8ff');log('Уклонение!');
+    /* РЕЛИКВИЯ «Призрачный шаг»: уклонение лечит */
+    if(hasRelic('ghoststep')){
+      var gh=Math.max(1,Math.round(pMaxHp()*.03));
+      h.hp=Math.min(pMaxHp(),h.hp+gh);
+      addFloat(225,210,'👻+'+gh,'#7ef29a',18);
+    }
+    updateHUD();return sleep(300);
+  }
   if(h.shield){h.shield=false;addFloat(225,200,'🛡 блок!','#9fd8ff');log('Щит поглотил удар!');sfx.click();updateHUD();return sleep(300);}
   var crit=Math.random()*100<e.crit;
   var bfx=getBiomeFx();var em=1;
@@ -262,28 +221,18 @@ function doEnemyAttack(e,h,mult,opts){
   fx.shake=(crit||opts.big)?16:10;fx.flash=.25;sfx.hurt();
   addBurst(225,180,opts.word||(crit?'КРИТ!':pick(['АЙ!','ОЙ!','ХРЯСЬ!'])));
   addFloat(225,230,'−'+dmg,'#ff6b7a');addParts(225,240,'#ff6b7a');
-
-  /* Мутация: вампиризм врага */
-  if(e.mutation==='vampiric'){
-    var vheal=Math.max(1,Math.round(dmg*0.2));
-    e.hp=Math.min(e.maxHp,e.hp+vheal);
-    addFloat(700,210,'+'+vheal,'#ff8b94',16);
+  /* РЕЛИКВИЯ «Кактус-талисман»: обидчик получает сдачу */
+  if(hasRelic('cactus')&&dmg>0&&!e.dead){
+    var cd2=Math.max(1,Math.round(dmg*.25));
+    e.hp=Math.max(0,e.hp-cd2);
+    addFloat(700,260,'🌵−'+cd2,'#b6ff5e',16);
+    if(e.hp<=0){e.dead=true;updateHUD();return sleep(300).then(function(){return winCombat();});}
   }
-
   if(e.tr==='venom'&&Math.random()<.4&&!h.poison){h.poison={turns:3,dmg:Math.max(2,Math.round(e.atk*.25))};log('☠️ Яд!');}
-
-  /* Мутация: шипы */
-  if(e.mutation==='thorns'){
-    var thornDmg=Math.max(1,Math.round(e.atk*0.15));
-    h.hp=Math.max(0,h.hp-thornDmg);
-    addFloat(225,260,'🌵−'+thornDmg,'#b6ff5e',16);
-  }
-
   if(h.thorns>0){e.hp=Math.max(0,e.hp-h.thorns);addFloat(700,260,'−'+h.thorns,'#c9f7d4',18);if(e.hp<=0){e.dead=true;updateHUD();return sleep(300).then(function(){return winCombat();});}}
   if(h.hp<h.maxHp*.25&&Math.random()<.3)enemyReact(['Ты уже на последнем издыхании!','Сдавайся!','Ха-ха, слабак!']);
   updateHUD();return Promise.resolve();
 }
-
 function onAction(a){
   if(G.busy||G.phase!=='combat')return;
   var h=G.hero;
@@ -296,7 +245,6 @@ function onAction(a){
   }
   continueAction(a);
 }
-
 function continueAction(a){
   var h=G.hero,e=G.enemy;G.busy=true;updateActions();var chain=Promise.resolve();
   if(a==='atk'){chain=heroStrike(1,{});}
@@ -325,7 +273,7 @@ function continueAction(a){
   else if(a==='flee'){
     if(e.boss){log('От босса не сбежать!');G.busy=false;updateActions();return;}
     enemyReact(['Ты что, сбежать от меня?!','Куда ты собрался?!','Трус! Вернись!']);
-    if(Math.random()*100<clamp(50+h.spd*2,35,92)){
+    if(Math.random()*100<clamp(50+h.spd*2+(hasRelic('swiftboot')?2:0),35,92)){
       log('Побег удался!');sfx.door();G.phase='doors';G.doors=null;
       $('#actions').classList.add('hidden');$('#elixirs').classList.add('hidden');
       G.busy=false;$('#event-layer').innerHTML='';renderDoors();saveRun();return;
@@ -355,7 +303,6 @@ function continueAction(a){
     roundEnd();h.defending=false;G.busy=false;updateHUD();updateActions();
   });
 }
-
 function roundEnd(){
   var h=G.hero;for(var k in h.buffs)if(h.buffs[k]>0)h.buffs[k]--;
   if(h.skillCd>0)h.skillCd--;if(h.skill2Cd>0)h.skill2Cd--;
@@ -371,7 +318,6 @@ function roundEnd(){
   }
   saveRun();
 }
-
 function companionAttack(){
   var c=G.companion,e=G.enemy;if(!c||!e||e.dead)return Promise.resolve();
   log(c.icon+' '+c.name+' атакует!');
@@ -383,23 +329,46 @@ function companionAttack(){
     updateHUD();return sleep(300);
   });
 }
-
+/* --- Победа: ПОНЯТНЫЙ лут с приписками --- */
 function winCombat(){
   var e=G.enemy,h=G.hero;if(!e)return Promise.resolve();
   e.dead=true;sfx.win();var lines=[];
   return sleep(800).then(function(){
     $('#actions').classList.add('hidden');$('#elixirs').classList.add('hidden');G.kills++;
+    if(G.phoenixCd>0)G.phoenixCd--;
     h.hp=Math.min(pMaxHp(),h.hp+Math.round(pMaxHp()*.06));
     var g=Math.round(e.gold*0.75)+ri(-3,5);
-    G.gold+=g;lines=['💰 +'+g+' золота','✨ +'+e.xp+' опыта'];
+    if(hasRelic('luck_bone')&&Math.random()<.15)g*=2;
+    if(hasRelic('midas'))g=Math.round(g*1.4);
+    var goldBonus=Math.min(100,relicFxSum('goldPct'));
+    if(goldBonus)g=Math.round(g*(1+goldBonus/100));
+    G.gold+=g;
+    lines=['💰 Золото: +'+g,'✨ Опыт: +'+e.xp];
     var monster=null;for(var i=0;i<ALL_MONSTERS.length;i++)if(ALL_MONSTERS[i].id===e.id){monster=ALL_MONSTERS[i];break;}
-    if(monster&&monster.mat&&Math.random()<.6){G.materials[monster.mat]=(G.materials[monster.mat]||0)+1;lines.push('🔮 '+monster.mat+'!');updateQuestProgress('material');}
-    if(Math.random()<(e.boss?1:e.elite?.5:.2)){h.pots++;lines.push('🧪 Зелье!');}
+    var matChance=Math.min(.95,.6+(hasRelic('clover')?.2:0)+relicFxSum('matPct')/100);
+    if(monster&&monster.mat&&Math.random()<matChance){G.materials[monster.mat]=(G.materials[monster.mat]||0)+1;lines.push('🔮 Ингредиент: '+monster.mat+'!');updateQuestProgress('material');}
+    if(Math.random()<(e.boss?1:e.elite?.5:.2)){h.pots++;lines.push('🧪 Зелье: +1');}
     var dropChance=e.boss?1:e.elite?.6:.3;
-    if(Math.random()<dropChance){var minR=e.boss?(e.final?2:1):0;var it=dropItem(minR);if(giveItem(it))lines.push(it.i+' '+it.n+'!');}
-    if((e.elite||e.boss)&&Math.random()<.25){var sk=grantRandomSkill();if(sk)lines.push(sk.icon+' '+sk.name+'!');}
-    if(e.boss&&Math.random()<.35){var rel=dropRelic();if(rel&&giveRelic(rel))lines.push(rel.i+' '+rel.n+'!');}
-    if(Math.random()<.3){var ek=pick(Object.keys(ELIXIRS));if(giveElixir(ek))lines.push(ELIXIRS[ek].i+' '+ELIXIRS[ek].n+'!');}
+    if(Math.random()<dropChance){
+      var minR=e.boss?(e.final?2:1):0;
+      var it=dropItem(minR);
+      if(giveItem(it)){
+        lines.push(it.i+' '+(SLOT_NAME[it.slot]||'Предмет')+': '+it.n+(it.cursed?' (ПРОКЛЯТО!)':'')+' · '+bonusTxt(it));
+      }
+    }
+    if((e.elite||e.boss)&&Math.random()<.25){
+      var sk=grantRandomSkill();
+      if(sk)lines.push(sk.icon+' Навык «'+sk.name+'»: '+sk.desc);
+    }
+    if(e.boss&&Math.random()<.35){
+      var rel=dropRelic();
+      if(rel){giveRelic(rel);}
+      else{G.gold+=100;lines.push('🏺 Все реликвии собраны! +100💰');}
+    }
+    if(Math.random()<.3){
+      var ek=pick(Object.keys(ELIXIRS));
+      if(giveElixir(ek))lines.push(ELIXIRS[ek].i+' Эликсир: '+ELIXIRS[ek].n+' — '+ELIXIRS[ek].d);
+    }
     if(G.companion){G.companion.battlesLeft--;if(G.companion.battlesLeft<=0){log(G.companion.icon+' '+G.companion.name+' уходит. Спасибо!');G.companion=null;}}
     addCard(e.id);updateQuestProgress('kill');
     updateHUD();saveRun();
@@ -410,7 +379,7 @@ function winCombat(){
     if(e.final){
       G.won=true;G.winBonus=true;
       el.innerHTML='<div class="ev"><h3 class="ev-title">🏆 ФИНАЛЬНАЯ ПОБЕДА!</h3><div class="ev-anim anim-glow">🏆</div><p>Пожиратель Миров повержен!</p><p style="font-size:14px;opacity:.8;margin:8px 0">Пройдено циклов: <b>'+(G.cycle||0)+'</b></p><div class="center"><button class="cbtn grn" id="win-continue">♾️ Бесконечный режим</button><button class="cbtn red" id="win-end">🏁 Завершить</button></div></div>';
-      $('#win-continue').onclick=function(){G.cycle=(G.cycle||0)+1;G.won=false;G.winBonus=false;G.floor=1;G.doors=null;$('#event-layer').innerHTML='';renderDoors();updateHUD();log('♾️ ЦИКЛ '+(G.cycle+1)+'! Враги усилились!');};
+      $('#win-continue').onclick=function(){G.cycle=(G.cycle||0)+1;G.won=false;G.winBonus=false;G.floor=1;G.doors=null;$('#event-layer').innerHTML='';renderDoors();updateHUD();saveRun();log('♾️ ЦИКЛ '+(G.cycle+1)+'! Враги усилились!');};
       $('#win-end').onclick=function(){showEnd(true);};
       return;
     }
@@ -422,9 +391,15 @@ function winCombat(){
     $('#btn-next').onclick=function(){sfx.click();nextFloor();};flushQuests();
   });
 }
-
 function defeat(){
   var h=G.hero;if(!h)return Promise.resolve();
+  if(h.hp<=0&&hasRelic('phoenix')&&phoenixReady()){
+    h.hp=1;h.dead=false;G.phoenixCd=10;
+    addFloat(225,200,'🪶 ФЕНИКС!','#ffd23d',24);
+    log('🪶 Перо Феникса спасает героя!');
+    sfx.level();updateHUD();
+    return Promise.resolve();
+  }
   h.dead=true;G.phase='over';sfx.lose();clearRun();
   return sleep(1000).then(function(){showEnd(false);});
 }

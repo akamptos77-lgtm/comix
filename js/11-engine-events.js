@@ -1,16 +1,15 @@
 'use strict';
 /* ============================================
 11-ENGINE-EVENTS: события, ЛАГЕРЬ (крафт +
-реликвия ×2 за покупку), КУЗНЕЦ (отдельная
-дверь: только улучшение надетых, бесконечное)
+реликвия ×2), КУЗНЕЦ (только надетые,
+«уровень предмета»), СУНДУКИ БЕЗ ЛОВУШЕК
+ПРИ УСПЕШНОМ ВЗЛОМЕ
 ============================================ */
-
-/* === ВЗЛОМ ЗАМКА === */
 function lockpickGame(onDone){
   var el=$('#event-layer');
   el.innerHTML='<div class="ev"><h3 class="ev-title">🗝️ ВЗЛОМ ЗАМКА</h3>'+
     '<div class="lock-bar"><div id="lock-pin"></div><div class="lock-zone"></div></div>'+
-    '<p>Останови метку в зелёной зоне!</p>'+
+    '<p>Останови метку в зелёной зоне — получишь ×2 лут <b>без ловушек</b>!</p>'+
     '<button class="cbtn grn" id="lock-stop">СТОП!</button></div>';
   var pos=0,dir=1,speed=2.2;
   var pin=$('#lock-pin');
@@ -21,48 +20,52 @@ function lockpickGame(onDone){
   },16);
   $('#lock-stop').onclick=function(){clearInterval(iv);onDone(pos>=40&&pos<=60);};
 }
-
-/* === СУНДУК === */
 function openChest(){
   var el=$('#event-layer');
   var locked=Math.random()<0.3;
   var html='<div class="ev"><h3 class="ev-title">🎁 СУНДУК</h3>'+
     '<div class="ev-anim anim-bounce">'+(locked?'🔒':'📦')+'</div>'+
-    '<p>'+(locked?'Сундук заперт! Можно взломать замок.':'Открыть его?')+'</p>'+
+    '<p>'+(locked?'Сундук заперт! Взлом = ×2 лут и без ловушек. Сила = риск мимика.':'Открыть силой? Есть риск мимика!')+'</p>'+
     '<div class="ev-choices">'+
-    '<button class="cbtn grn" id="chest-open">'+(locked?'💪 Открыть силой':'📦 Открыть')+'</button>';
-  if(locked)html+='<button class="cbtn blu" id="chest-pick">🗝️ Взломать (×2 лут)</button>';
+    '<button class="cbtn grn" id="chest-open">'+(locked?'💪 Открыть силой (риск)':'📦 Открыть (риск)')+'</button>';
+  if(locked)html+='<button class="cbtn blu" id="chest-pick">🗝️ Взломать (×2 лут, безопасно)</button>';
   html+='<button class="cbtn ghost" id="chest-leave">Пройти мимо</button></div></div>';
   el.innerHTML=html;
-  $('#chest-open').onclick=function(){doChestOpen(1);};
+  $('#chest-open').onclick=function(){doChestOpen(1,false);};
   if(locked){
     $('#chest-pick').onclick=function(){
       lockpickGame(function(ok){
-        if(ok){log('🗝️ Замок взломан!');doChestOpen(2);}
-        else{log('💥 Замок сломался! Ловушка!');var dm=ri(6,12)+G.floor;G.hero.hp=Math.max(1,G.hero.hp-dm);sfx.hurt();updateHUD();doChestOpen(1);}
+        if(ok){log('🗝️ Замок взломан! ×2 лут, без ловушек!');doChestOpen(2,true);}
+        else{log('🗝️ Не вышло... Открываем как есть.');doChestOpen(1,true);}
       });
     };
   }
   $('#chest-leave').onclick=function(){afterEvent();};
 }
-
-function doChestOpen(mult){
+function doChestOpen(mult,noMimic){
   G.chestsOpened++;updateQuestProgress('chest');
-  if(Math.random()<.15){log('⚠️ Это МИМИК!');startCombat('fight',true);return;}
+  /* Мимик — только при открытии силой */
+  if(!noMimic&&Math.random()<.15){log('⚠️ Это МИМИК!');startCombat('fight',true);return;}
   var r=Math.random(),el=$('#event-layer');
+  /* При взломе ловушек не бывает: ловушка заменяется золотом */
+  if(noMimic&&r>=.85)r=.25;
   el.innerHTML='<div class="ev"><h3 class="ev-title">🎁 СУНДУК</h3><div class="ev-anim anim-glow">✨</div><p>Что внутри?..</p></div>';
   sleep(600).then(function(){
-    if(r<.3){var g=(ri(15,30)+G.floor*2)*mult;G.gold+=g;sfx.gold();el.innerHTML='<div class="ev"><h3 class="ev-title">🎁 СУНДУК</h3><div class="ev-anim anim-glow">💰</div><div class="loot"><div>+<b>'+g+'</b> золота!</div></div><button class="cbtn" id="btn-next" style="background:var(--yel)">Дальше ▼</button></div>';}
-    else if(r<.5){G.hero.pots+=mult;sfx.potion();el.innerHTML='<div class="ev"><h3 class="ev-title">🎁 СУНДУК</h3><div class="ev-anim anim-glow">🧪</div><div class="loot"><div>+'+mult+' зелье!</div></div><button class="cbtn" id="btn-next" style="background:var(--yel)">Дальше ▼</button></div>';}
-    else if(r<.7){var it=dropItem(mult>1?1:0);giveItem(it);sfx.mystic();el.innerHTML='<div class="ev"><h3 class="ev-title">🎁 СУНДУК</h3><div class="ev-anim anim-glow">'+it.i+'</div><div class="loot"><div><b>'+it.n+'</b>!</div></div><button class="cbtn" id="btn-next" style="background:var(--yel)">Дальше ▼</button></div>';}
-    else if(r<.85){var xp=(ri(15,30)+G.floor*2)*mult;sfx.mystic();el.innerHTML='<div class="ev"><h3 class="ev-title">📜 СВИТОК</h3><div class="ev-anim anim-glow">✨</div><div class="loot"><div>+'+xp+' опыта!</div></div><button class="cbtn" id="btn-next" style="background:var(--yel)">Дальше ▼</button></div>';gainXp(xp).then(function(){if(G.phase!=='over'){var nb=el.querySelector('#btn-next');if(nb)nb.onclick=function(){sfx.click();nextFloor();};}});return;}
-    else{var dm=ri(6,12)+G.floor;G.hero.hp=Math.max(1,G.hero.hp-dm);sfx.hurt();el.innerHTML='<div class="ev"><h3 class="ev-title">💥 ЛОВУШКА!</h3><div class="ev-anim anim-shake">🥊</div><div class="loot"><div>−<b>'+dm+' HP</b></div></div><button class="cbtn" id="btn-next" style="background:var(--yel)">Дальше ▼</button></div>';}
+    if(r<.3){var g=(ri(15,30)+G.floor*2)*mult;G.gold+=g;sfx.gold();
+      el.innerHTML='<div class="ev"><h3 class="ev-title">🎁 СУНДУК</h3><div class="ev-anim anim-glow">💰</div><div class="loot"><div>+<b>'+g+'</b> золота!</div></div><button class="cbtn" id="btn-next" style="background:var(--yel)">Дальше ▼</button></div>';}
+    else if(r<.5){G.hero.pots+=mult;sfx.potion();
+      el.innerHTML='<div class="ev"><h3 class="ev-title">🎁 СУНДУК</h3><div class="ev-anim anim-glow">🧪</div><div class="loot"><div>🧪 Зелье: +'+mult+'</div></div><button class="cbtn" id="btn-next" style="background:var(--yel)">Дальше ▼</button></div>';}
+    else if(r<.7){var it=dropItem(mult>1?1:0);giveItem(it);sfx.mystic();
+      el.innerHTML='<div class="ev"><h3 class="ev-title">🎁 СУНДУК</h3><div class="ev-anim anim-glow">'+it.i+'</div><div class="loot"><div>'+it.i+' '+(SLOT_NAME[it.slot]||'Предмет')+': <b>'+it.n+'</b>'+(it.cursed?' (ПРОКЛЯТО!)':'')+'</div><div style="font-size:13px">'+bonusTxt(it)+'</div></div><button class="cbtn" id="btn-next" style="background:var(--yel)">Дальше ▼</button></div>';}
+    else if(r<.85){var xp=(ri(15,30)+G.floor*2)*mult;sfx.mystic();
+      el.innerHTML='<div class="ev"><h3 class="ev-title">📜 СВИТОК</h3><div class="ev-anim anim-glow">✨</div><div class="loot"><div>+'+xp+' опыта!</div></div><button class="cbtn" id="btn-next" style="background:var(--yel)">Дальше ▼</button></div>';
+      gainXp(xp).then(function(){if(G.phase!=='over'){var nb=el.querySelector('#btn-next');if(nb)nb.onclick=function(){sfx.click();nextFloor();};}});return;}
+    else{var dm=ri(6,12)+G.floor;G.hero.hp=Math.max(1,G.hero.hp-dm);sfx.hurt();
+      el.innerHTML='<div class="ev"><h3 class="ev-title">💥 ЛОВУШКА!</h3><div class="ev-anim anim-shake">🥊</div><div class="loot"><div>−<b>'+dm+' HP</b></div></div><button class="cbtn" id="btn-next" style="background:var(--yel)">Дальше ▼</button></div>';}
     updateHUD();saveRun();
     var nb=el.querySelector('#btn-next');if(nb)nb.onclick=function(){sfx.click();nextFloor();};
   });
 }
-
-/* === ЗАГАДКА === */
 function openRiddle(){
   var el=$('#event-layer'),r=pick(RIDDLES),answered=false;
   el.innerHTML='<div class="ev"><h3 class="ev-title">🧩 ЗАГАДКА СТРАННИКА</h3><div class="ev-anim">🧙</div><p style="font-style:italic;font-size:17px">«'+r.q+'»</p><div class="riddle-opts">'+r.a.map(function(ans,i){return'<button class="cbtn riddle-btn" data-idx="'+i+'">'+ans+'</button>';}).join('')+'</div></div>';
@@ -85,12 +88,8 @@ function openRiddle(){
     };
   });
 }
-
-/* === ЛАГЕРЬ: отдых, тренировка, КРАФТ, целитель, реликвия ×2 === */
-function relicCampCost(){
-  return Math.round(250*Math.pow(2,G.relicBuys||0));
-}
-
+/* === ЛАГЕРЬ === */
+function relicCampCost(){return Math.round(250*Math.pow(2,G.relicBuys||0));}
 function openRest(){
   var el=$('#event-layer');
   var healCost=25+G.floor*2;
@@ -122,11 +121,10 @@ function openRest(){
     G.gold-=cost;
     G.relicBuys=(G.relicBuys||0)+1;
     giveRelic(rel);
-    sfx.mystic();updateHUD();saveRun();openRest();
+    updateHUD();saveRun();openRest();
   };
 }
-
-/* === КРАФТ (только в лагере) === */
+/* === КРАФТ (в лагере) === */
 function openCraft(){
   var el=$('#event-layer');
   var recipesHtml=RECIPES.map(function(rec,idx){
@@ -139,7 +137,7 @@ function openCraft(){
     return'<div class="bag-item rar'+rec.rar+'"><b>'+rec.i+' '+rec.n+' <span class="rar-tag">'+RAR[rec.rar]+'</span></b><span>'+rec.desc+'</span><small>'+matsStr+'</small><div class="bag-actions"><button class="cbtn small grn" data-craft="'+idx+'" '+(!canCraft?'disabled':'')+'>⚒️ Создать</button></div></div>';
   }).join('');
   el.innerHTML='<div class="ev" style="max-width:720px"><h3 class="ev-title">⚒️ КРАФТ</h3>'+
-    '<p style="font-size:13px;opacity:.8;margin-bottom:10px">Собери ингредиенты и создай предмет!</p>'+
+    '<p style="font-size:13px;opacity:.8;margin-bottom:10px">Собери ингредиенты с врагов и создай предмет!</p>'+
     '<div class="bag-row" style="max-height:300px;overflow-y:auto">'+recipesHtml+'</div>'+
     '<button class="cbtn ghost" id="craft-back" style="margin-top:14px">← Назад</button></div>';
   el.querySelectorAll('[data-craft]').forEach(function(b){
@@ -155,23 +153,20 @@ function openCraft(){
   });
   $('#craft-back').onclick=function(){openRest();};
 }
-
-/* === КУЗНЕЦ: отдельная дверь, только НАДЕТЫЕ предметы === */
+/* === КУЗНЕЦ: только надетые, «уровень предмета» === */
+function itemLevel(it){return (it.tier||0)*3+(it.up||0);}
 function upCost(it){
-  var totalUpgrades=(it.tier||0)*3+(it.up||0);
+  var totalUpgrades=itemLevel(it);
   return Math.round((40+it.rar*40)+totalUpgrades*25);
 }
-
 function upRow(it,key,where){
   var c=upCost(it);
-  var tierPrefix=(it.tier||0)>0?' <span class="up-tag" style="color:#8a1eff">+'+it.tier+'</span>':'';
-  var upInfo=(it.up||0)>0?' ('+it.up+'/3)':'';
-  return'<div class="bag-item rar'+it.rar+'"><b>'+it.i+' '+it.n+tierPrefix+upInfo+' <span class="rar-tag">'+RAR[it.rar]+'</span></b>'+
-    '<span>'+bonusTxt(it)+'</span><small>'+where+'</small>'+
-    '<div class="bag-actions"><button class="cbtn small grn" data-up="'+key+'"'+((G.gold<c)?' disabled':'')+'>'+
-    '🔨 Улучшить ('+c+'💰)</button></div></div>';
+  var lvl=itemLevel(it);
+  var lvlTag=lvl>0?' <span class="up-tag">ур.'+lvl+'</span>':'';
+  return'<div class="bag-item rar'+it.rar+'"><b>'+it.i+' '+it.n+lvlTag+' <span class="rar-tag">'+RAR[it.rar]+'</span></b>'+
+    '<span>'+bonusTxt(it)+'</span><small>'+where+' · уровень предмета: '+lvl+'</small>'+
+    '<div class="bag-actions"><button class="cbtn small grn" data-up="'+key+'"'+((G.gold<c)?' disabled':'')+'>🔨 Улучшить до ур.'+(lvl+1)+' ('+c+'💰)</button></div></div>';
 }
-
 function openForge(){
   var el=$('#event-layer'),h=G.hero;
   var rows='';
@@ -180,7 +175,7 @@ function openForge(){
     if(it)rows+=upRow(it,'eq:'+sl,SLOT_NAME[sl]||sl);
   }
   el.innerHTML='<div class="ev" style="max-width:720px"><h3 class="ev-title">🔨 КУЗНЕЦ — УЛУЧШЕНИЕ</h3>'+
-    '<p style="font-size:13px;opacity:.8;margin-bottom:10px">Улучшаются только <b>надетые</b> предметы. Бонусы — <b>фикс</b>. Каждые <b>3 улучшения</b> → префикс <b>+1</b>. Прокачка <b>бесконечна</b>! Золото: <b>'+G.gold+'</b>💰</p>'+
+    '<p style="font-size:13px;opacity:.8;margin-bottom:10px">Каждое улучшение повышает <b>уровень предмета</b>: +25% к его бонусам. Улучшаются только <b>надетые</b> предметы. Золото: <b>'+G.gold+'</b>💰</p>'+
     '<div class="bag-row" style="max-height:300px;overflow-y:auto">'+(rows||'<p class="hint">Нет надетых предметов для улучшения.</p>')+'</div>'+
     '<button class="cbtn ghost" id="forge-back" style="margin-top:14px">← Уйти</button></div>';
   el.querySelectorAll('[data-up]').forEach(function(b){
@@ -193,20 +188,14 @@ function openForge(){
       if(G.gold<c)return;
       G.gold-=c;
       it.up=(it.up||0)+1;
-      if(it.up>=3){
-        it.up=0;
-        it.tier=(it.tier||0)+1;
-        sfx.smith();log('🔨 '+it.i+' '+it.n+' получил префикс +'+it.tier+'!');
-      }else{
-        sfx.smith();log('🔨 '+it.i+' '+it.n+' улучшен ('+it.up+'/3)');
-      }
+      if(it.up>=3){it.up=0;it.tier=(it.tier||0)+1;sfx.smith();log('🔨 '+it.i+' '+it.n+' теперь «+'+it.tier+'»!');}
+      else{sfx.smith();log('🔨 '+it.i+' '+it.n+' → уровень '+itemLevel(it));}
       updateHUD();saveRun();openForge();
     };
   });
   $('#forge-back').onclick=function(){afterEvent();};
 }
-
-/* === ФОНТАН === */
+/* === ОСТАЛЬНЫЕ СОБЫТИЯ === */
 function openFount(){
   var el=$('#event-layer'),fishCost=window._fishCost||5;
   el.innerHTML='<div class="ev"><h3 class="ev-title">⛲ ФОНТАН</h3><div class="ev-anim anim-glow">⛲</div><div class="ev-choices">'+
@@ -217,31 +206,34 @@ function openFount(){
     '</div></div>';
   $('#f-drink').onclick=function(){healHero(.3);log('Живая вода!');afterEvent();};
   $('#f-bottle').onclick=function(){G.hero.pots++;sfx.potion();log('Фляга полна!');afterEvent();};
-  $('#f-dive').onclick=function(){if(Math.random()<.6){var g=ri(30,60)+G.floor*2;G.gold+=g;sfx.gold();log('+'+g+'💰!');}else{var dm=ri(10,18)+Math.floor(G.floor/2);G.hero.hp=Math.max(1,G.hero.hp-dm);sfx.hurt();log('−'+dm+' HP');}updateHUD();afterEvent();};
+  $('#f-dive').onclick=function(){
+    if(Math.random()<.6){var g=ri(30,60)+G.floor*2;G.gold+=g;sfx.gold();log('+'+g+'💰!');}
+    else{var dm=ri(10,18)+Math.floor(G.floor/2);G.hero.hp=Math.max(1,G.hero.hp-dm);sfx.hurt();log('−'+dm+' HP');}
+    updateHUD();afterEvent();
+  };
   $('#f-fish').onclick=function(){goFishing();};
 }
-
-/* === АЛТАРЬ === */
 function openShrine(){
   var el=$('#event-layer');
   el.innerHTML='<div class="ev"><h3 class="ev-title">🕯️ АЛТАРЬ</h3><div class="ev-anim anim-glow">🕯️</div><div class="ev-choices">'+
     '<button class="cbtn" id="sh-pray" style="background:var(--yel)">🙏 Молиться</button>'+
     '<button class="cbtn grn" id="sh-give" '+(G.gold<20?'disabled':'')+'>💰 20 золота</button>'+
     '<button class="cbtn ghost" id="sh-leave">Уйти</button></div></div>';
-  $('#sh-pray').onclick=function(){var r=Math.random();if(r<.55){sfx.mystic();log('Боги услышали!');chooseCard().then(function(){afterEvent();});}else if(r<.85){healHero(.15);afterEvent();}else{var dm=ri(8,14)+Math.floor(G.floor/2);G.hero.hp=Math.max(1,G.hero.hp-dm);sfx.hurt();log('−'+dm+' HP');updateHUD();afterEvent();}};
+  $('#sh-pray').onclick=function(){
+    var r=Math.random();
+    if(r<.55){sfx.mystic();log('Боги услышали!');chooseCard().then(function(){afterEvent();});}
+    else if(r<.85){healHero(.15);afterEvent();}
+    else{var dm=ri(8,14)+Math.floor(G.floor/2);G.hero.hp=Math.max(1,G.hero.hp-dm);sfx.hurt();log('−'+dm+' HP');updateHUD();afterEvent();}
+  };
   $('#sh-give').onclick=function(){G.gold-=20;chooseCard().then(function(){updateHUD();afterEvent();});};
   $('#sh-leave').onclick=function(){afterEvent();};
 }
-
-/* === ЛОВУШКА === */
 function openTrap(){
   var dodgeChance=Math.min(.85,.4+G.hero.stats.agi*.04);
   if(Math.random()<dodgeChance){sfx.click();log('🕸️ Уклонился!');}
   else{var dm=ri(8,14)+Math.floor(G.floor/2);G.hero.hp=Math.max(1,G.hero.hp-dm);sfx.hurt();log('🕸️ Ловушка! −'+dm+' HP');}
   updateHUD();afterEvent();
 }
-
-/* === ТАВЕРНА === */
 function openTavern(){
   var el=$('#event-layer');
   el.innerHTML='<div class="ev"><h3 class="ev-title">🍺 ТАВЕРНА</h3><div class="ev-anim anim-glow">🍺</div><div class="ev-choices">'+
@@ -252,8 +244,6 @@ function openTavern(){
   $('#tv-meal').onclick=function(){G.gold-=25;healHero(.5);afterEvent();};
   $('#tv-leave').onclick=function(){afterEvent();};
 }
-
-/* === БИБЛИОТЕКА === */
 function openLibrary(){
   var cost=30+G.floor,el=$('#event-layer');
   el.innerHTML='<div class="ev"><h3 class="ev-title">📚 БИБЛИОТЕКА</h3><div class="ev-anim">📖</div><div class="ev-choices">'+
@@ -264,34 +254,31 @@ function openLibrary(){
   $('#lib-study').onclick=function(){G.gold-=cost*2;G.hero.stats.int++;sfx.mystic();log('🔮 INT: '+G.hero.stats.int);updateHUD();afterEvent();};
   $('#lib-leave').onclick=function(){afterEvent();};
 }
-
-/* === САНКТИЛИЙ === */
 function openSkillEvent(){
   var el=$('#event-layer');
   el.innerHTML='<div class="ev"><h3 class="ev-title">📖 САНКТИЛИЙ</h3><div class="ev-anim anim-glow">📖</div><p>Изучить навык?</p><div class="ev-choices"><button class="cbtn grn" id="sk-learn">📖 Изучить</button><button class="cbtn ghost" id="sk-leave">Уйти</button></div></div>';
   $('#sk-learn').onclick=function(){var s=grantRandomSkill();if(s){showSkillLearned(s);}else{afterEvent();}};
   $('#sk-leave').onclick=function(){afterEvent();};
 }
-
 function showSkillLearned(s){
   var el=$('#event-layer');
   el.innerHTML='<div class="ev"><h3 class="ev-title">📖 НОВЫЙ НАВЫК!</h3><div style="font-size:48px">'+s.icon+'</div><div class="loot"><div><b>Навык «'+s.name+'»</b></div><div style="font-size:14px">'+s.desc+'</div></div><button class="cbtn" id="btn-next" style="background:var(--yel)">Дальше ▼</button></div>';
   saveRun();
   $('#btn-next').onclick=function(){sfx.click();nextFloor();};
 }
-
-/* === СПУТНИК === */
 function openCompanionEvent(){
   var el=$('#event-layer'),opts=[COMPANIONS.knight,COMPANIONS.wolf,COMPANIONS.fairy_c],comp=pick(opts);
   var scenarios={knight:'Ты находишь рыцаря, придавленного обломками.',wolf:'Волк попал в капкан и скулит.',fairy_c:'Раненая фея лежит у дороги.'};
   var key=comp===COMPANIONS.knight?'knight':comp===COMPANIONS.wolf?'wolf':'fairy_c';
   el.innerHTML='<div class="ev"><h3 class="ev-title">🆘 НУЖНА ПОМОЩЬ</h3><div class="ev-anim anim-shake">'+comp.icon+'</div><p>'+scenarios[key]+'</p><div class="ev-choices"><button class="cbtn grn" id="comp-help">🤝 Помочь</button><button class="cbtn red" id="comp-rob">💰 Ограбить</button><button class="cbtn ghost" id="comp-ignore">Пройти мимо</button></div></div>';
   $('#comp-help').onclick=function(){G.companion={name:comp.name,icon:comp.icon,atk:comp.atk,battlesLeft:comp.battles};sfx.mystic();log(comp.icon+' '+comp.name+' присоединяется!');updateHUD();saveRun();afterEvent();};
-  $('#comp-rob').onclick=function(){if(Math.random()<.5){var g=ri(30,60)+G.floor*2;G.gold+=g;sfx.gold();log('Ограбил: +'+g+'💰');}else{var it=dropItem(0);giveItem(it);log('Ограбил: '+it.n);}G.companion=null;updateHUD();saveRun();afterEvent();};
+  $('#comp-rob').onclick=function(){
+    if(Math.random()<.5){var g=ri(30,60)+G.floor*2;G.gold+=g;sfx.gold();log('Ограбил: +'+g+'💰');}
+    else{var it=dropItem(0);giveItem(it);log('Ограбил: '+it.n);}
+    G.companion=null;updateHUD();saveRun();afterEvent();
+  };
   $('#comp-ignore').onclick=function(){afterEvent();};
 }
-
-/* === МАНЕКЕН === */
 function openDummy(){
   var el=$('#event-layer');
   el.innerHTML='<div class="ev"><h3 class="ev-title">🥊 МАНЕКЕН</h3><div class="ev-anim anim-shake">🥊</div><div class="ev-choices"><button class="cbtn" id="dm-atk" style="background:var(--yel)">⚔️ +2 атаки</button><button class="cbtn" id="dm-def" style="background:var(--yel)">🛡️ +2 защиты</button><button class="cbtn ghost" id="dm-leave">Уйти</button></div></div>';
@@ -299,11 +286,13 @@ function openDummy(){
   $('#dm-def').onclick=function(){G.hero.def+=2;sfx.gold();log('+2 защиты!');afterEvent();};
   $('#dm-leave').onclick=function(){afterEvent();};
 }
-
-/* === ПРОКЛЯТОЕ ЗОЛОТО === */
 function openCursed(){
   var amt=ri(30,60)+G.floor*2,el=$('#event-layer');
   el.innerHTML='<div class="ev"><h3 class="ev-title">💰 ПРОКЛЯТОЕ ЗОЛОТО</h3><div class="ev-anim anim-glow">💰</div><p>Груда ('+amt+'💰), но проклята...</p><div class="ev-choices"><button class="cbtn red" id="cg-take">💰 Взять (риск)</button><button class="cbtn ghost" id="cg-leave">Не трогать</button></div></div>';
-  $('#cg-take').onclick=function(){if(Math.random()<.5){G.gold+=amt;sfx.gold();log('+'+amt+'💰!');}else{var dm=ri(8,14)+Math.floor(G.floor/2);G.hero.hp=Math.max(1,G.hero.hp-dm);G.gold+=Math.round(amt/2);sfx.hurt();log('Проклятие! −'+dm+' HP');}updateHUD();afterEvent();};
+  $('#cg-take').onclick=function(){
+    if(Math.random()<.5){G.gold+=amt;sfx.gold();log('+'+amt+'💰!');}
+    else{var dm=ri(8,14)+Math.floor(G.floor/2);G.hero.hp=Math.max(1,G.hero.hp-dm);G.gold+=Math.round(amt/2);sfx.hurt();log('Проклятие! −'+dm+' HP');}
+    updateHUD();afterEvent();
+  };
   $('#cg-leave').onclick=function(){afterEvent();};
 }

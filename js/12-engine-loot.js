@@ -1,11 +1,16 @@
 'use strict';
 /* ============================================
-12-ENGINE-LOOT: дроп, реликвии БЕЗ ЛИМИТА,
-магазин, квесты, фикса-бонусы предметов
+12-ENGINE-LOOT: дроп, реликвии БЕЗ лимита +
+МОДАЛКА реликвии, магазин, квесты
 ============================================ */
 function dropItem(minRar){
   minRar=minRar||0;var f=G.floor,cls=G.hero.cls;
-  if(Math.random()<.08){var cursed=pick(CURSED_ITEMS);var copy={};for(var k in cursed)copy[k]=cursed[k];copy.b={};for(var b in cursed.b)copy.b[b]=cursed.b[b];copy.up=0;copy.tier=0;copy.cursed=true;return copy;}
+  if(Math.random()<.08){
+    var cursed=pick(CURSED_ITEMS);var copy={};
+    for(var k in cursed)copy[k]=cursed[k];
+    copy.b={};for(var b in cursed.b)copy.b[b]=cursed.b[b];
+    copy.up=0;copy.tier=0;copy.cursed=true;return copy;
+  }
   var pool=ITEMS().filter(function(it){return it.f<=f&&it.rar>=minRar&&(!it.cls||it.cls.indexOf(cls)>=0);});
   if(!pool.length)pool=ITEMS().filter(function(it){return it.f<=f&&(!it.cls||it.cls.indexOf(cls)>=0);});
   if(!pool.length)pool=ITEMS().filter(function(it){return it.f<=f;});
@@ -19,24 +24,46 @@ function dropItem(minRar){
 function giveItem(it){
   if(G.hero.inv.length>=24){log('🎒 Сумка полна!');return false;}
   G.hero.inv.push(it);
-  log('🎒 Предмет получен: '+it.i+' '+it.n+(it.cursed?' (ПРОКЛЯТО!)':''));
+  log('🎒 Предмет: '+it.i+' '+it.n+' ('+(SLOT_NAME[it.slot]||it.slot)+')'+(it.cursed?' (ПРОКЛЯТО!)':''));
   saveRun();return true;
 }
 function giveElixir(et){
   var h=G.hero;
   if(h.elixirs.length>=h.elixirCap){log('Ячейки эликсиров полны!');return false;}
   h.elixirs.push(et);
-  log('🧪 Эликсир получен: '+ELIXIRS[et].i+' '+ELIXIRS[et].n+' — '+ELIXIRS[et].d);
+  log('🧪 Эликсир: '+ELIXIRS[et].i+' '+ELIXIRS[et].n+' — '+ELIXIRS[et].d);
   saveRun();return true;
 }
-/* === РЕЛИКВИИ: ЛИМИТА НЕТ === */
+/* === МОДАЛКА РЕЛИКВИИ (всегда, откуда бы ни выпала) === */
+function showRelicModal(rel){
+  var o=$('#ovl-relic');
+  if(!o){
+    o=document.createElement('div');
+    o.id='ovl-relic';o.className='ovl';
+    o.innerHTML='<div class="panel" style="max-width:440px">'+
+      '<h2 style="font-size:22px">🏺 РЕЛИКВИЯ!</h2>'+
+      '<div id="relic-ico" style="font-size:64px"></div>'+
+      '<h3 id="relic-name" style="margin:6px 0"></h3>'+
+      '<p id="relic-desc" style="font-size:15px;margin:10px 0"></p>'+
+      '<button class="cbtn grn" id="relic-ok">Забрать!</button></div>';
+    document.body.appendChild(o);
+    $('#relic-ok').onclick=function(){o.classList.remove('on');sfx.click();};
+  }
+  $('#relic-ico').textContent=rel.i;
+  $('#relic-name').textContent=rel.n;
+  $('#relic-desc').textContent=rel.d;
+  o.classList.add('on');
+  sfx.mystic();
+}
+/* === РЕЛИКВИИ: без лимита === */
 function giveRelic(rel){
   if(!rel)return false;
   if(!G.relics)G.relics=[];
   if(G.relics.indexOf(rel.id)>=0){G.gold+=60;log('🏺 Дубликат реликвии! +60💰');return false;}
   G.relics.push(rel.id);
-  log('🏺 РЕЛИКВИЯ: '+rel.i+' «'+rel.n+'» — '+rel.d);
-  sfx.mystic();
+  log('🏺 РЕЛИКВИЯ: '+rel.i+' '+rel.n+'!');
+  showRelicModal(rel);
+  saveRun();
   return true;
 }
 function dropRelic(){
@@ -45,7 +72,6 @@ function dropRelic(){
   if(!pool.length)return null;
   return pick(pool);
 }
-/* Бонусы предмета: фикса + тиры */
 function bonusTxt(it){
   var totalUpgrades=(it.tier||0)*3+(it.up||0);
   return Object.keys(it.b).map(function(k){
@@ -53,8 +79,9 @@ function bonusTxt(it){
     var flat=(k==='vamp')?0.01:Math.max(1,Math.round(base*0.15));
     var val=Math.round((base+flat*totalUpgrades)*100)/100;
     var names={atk:'⚔️',def:'🛡️',hp:'❤️',crit:'🎯',dodge:'💨',vamp:'🩸'};
+    if(k==='vamp')return'+'+Math.round(val*100)+'% вампиризма';
     return'+'+val+(names[k]||k);
-  }).join(' · ');
+  }).join(' · ')+(it.el?' · '+ELEMENTS[it.el].icon+' стихия':'');
 }
 function sellPrice(it){
   var totalUpgrades=(it.tier||0)*3+(it.up||0);
@@ -158,7 +185,11 @@ function generateShopGoods(){
   var goods=[];
   goods.push({kind:'consume',i:'🧪',n:'Зелье',d:'+1 зелье',p:25,b:function(h){h.pots++;}});
   goods.push({kind:'consume',i:'🍖',n:'Похлёбка',d:'Лечит 50% HP',p:40,b:function(h){h.hp=Math.min(pMaxHp(),h.hp+Math.round(pMaxHp()*.5));}});
-  for(var i=0;i<ri(2,3);i++){var it=dropShopItem();var price=([20,45,90][it.rar]||20)+G.floor*2;goods.push({kind:'item',i:it.i,n:it.n,d:bonusTxt(it),p:price,it:it});}
+  for(var i=0;i<ri(2,3);i++){
+    var it=dropShopItem();
+    var price=([20,45,90][it.rar]||20)+G.floor*2;
+    goods.push({kind:'item',i:it.i,n:it.n,d:bonusTxt(it),p:price,it:it});
+  }
   var ek=pick(Object.keys(ELIXIRS));
   goods.push({kind:'elixir',i:ELIXIRS[ek].i,n:ELIXIRS[ek].n,d:ELIXIRS[ek].d,p:35,et:ek});
   G.shopGoods=goods;
