@@ -1,6 +1,6 @@
 'use strict';
 /* 11c-ENGINE-SECRET: испытание стража.
-   Встроены: пояснения с кнопкой СТАРТ + видимые таймеры */
+   ИСПРАВЛЕНО: время теперь в СЕКУНДАХ, не в мс */
 
 function secIntro(title,icon,rules,startFn){
 var el=$('#event-layer');
@@ -47,13 +47,11 @@ else if(r<.75)trialCatchRune();
 else trialOddOne();
 }
 
-/* === 1. ПАМЯТЬ (без таймера, спокойно) === */
-function trialMemory(){
-secIntro('🗝️ ИСПЫТАНИЕ: ПАМЯТЬ','🗿','Страж покажет порядок из 3 рун. Внимательно смотри, затем повтори порядок кликами. Ошибка пробуждает стража!',memoryGame);
-}
+/* === 1. ПАМЯТЬ (без таймера) === */
+function trialMemory(){secIntro('🗝️ ИСПЫТАНИЕ: ПАМЯТЬ','🗿','Страж покажет порядок из 3 рун. Внимательно смотри, затем повтори порядок кликами. Ошибка пробуждает стража!',memoryGame);}
 function memoryGame(){
 var el=$('#event-layer');var runes=['🔥','❄️','⚡','☠️'];var seq=[ri(0,3),ri(0,3),ri(0,3)];var phase='show',pos=0;
-el.innerHTML='<div class="ev"><h3 class="ev-title">🗝️ ПАМЯТЬ</h3><p id="sec-msg" style="font-size:16px;font-weight:700">👁️ Смотри: страж показывает порядок...</p><div id="sec-dots" style="font-size:22px;letter-spacing:8px;margin:6px 0">⬜⬜⬜</div>'+
+el.innerHTML='<div class="ev"><h3 class="ev-title">🗝️ ПАМЯТЬ</h3><p id="sec-msg" style="font-size:16px;font-weight:700">👁️ Смотри: страж показывает порядок...</p><div id="sec-dots" style="font-size:22px;letter-spacing:8px;margin:6px 0">⬜⬜</div>'+
 '<div style="display:flex;gap:14px;justify-content:center;margin:16px 0">'+runes.map(function(r,i){return'<button class="sec-rune" data-r="'+i+'" style="font-size:36px;width:80px;height:80px;border:4px solid var(--ink);border-radius:14px;background:#fff;box-shadow:4px 4px 0 var(--ink);cursor:pointer" disabled>'+r+'</button>';}).join('')+'</div></div>';
 var btns=el.querySelectorAll('.sec-rune');var dots=['⬜','⬜',''];
 function setDots(){var d=$('#sec-dots');if(d)d.textContent=dots.join('');}
@@ -73,12 +71,10 @@ else{phase='done';secretFail();}
 });
 }
 
-/* === 2. СТОП-ПОТОК (таймер 7с) === */
-function trialStopFlow(){
-secIntro('🗝️ ИСПЫТАНИЕ: СТОП-ПОТОК','⏳','Руны крутятся по кругу. Жми СТОП, когда в слоте появится нужная руна. У тебя <b>7 секунд</b>.',stopFlowGame);
-}
+/* === 2. СТОП-ПОТОК (7 сек) === */
+function trialStopFlow(){secIntro('🗝️ ИСПЫТАНИЕ: СТОП-ПОТОК','⏳','Руны крутятся по кругу. Жми СТОП, когда в слоте появится нужная руна. У тебя <b>7 секунд</b>.',stopFlowGame);}
 function stopFlowGame(){
-var runes=['🔥','️','⚡','☠️'];var target=ri(0,3),cur=ri(0,3),done=false,cancelTimer=null;
+var runes=['🔥','❄️','⚡','☠️'];var target=ri(0,3),cur=ri(0,3),done=false,cancelTimer=null;
 var el=$('#event-layer');
 el.innerHTML='<div class="ev"><h3 class="ev-title">⏳ СТОП-ПОТОК</h3><p>Жми СТОП, когда будет: <span style="font-size:26px">'+runes[target]+'</span></p>'+secTimerBar()+
 '<p id="sf-slot" style="font-size:56px;margin:14px 0">'+runes[cur]+'</p><button class="cbtn red" id="sf-stop" style="font-size:22px;padding:14px 40px">🛑 СТОП!</button></div>';
@@ -89,12 +85,11 @@ cancelTimer=secCountdown(7,function(){if(!done){done=true;clearInterval(iv);secr
 $('#sf-stop').onclick=function(){if(done)return;done=true;clearInterval(iv);if(cancelTimer)cancelTimer();if(cur===target){sfx.mystic();secretReward();}else secretFail();};
 }
 
-/* === 3. ПОЙМАЙ РУНУ (3 раунда, таймер) === */
-function trialCatchRune(){
-secIntro('🗝️ ИСПЫТАНИЕ: ПОЙМАЙ РУНУ','🎯','3 раунда. Каждый раунд кликни по нужной руне, пока не вышло время. Промах или таймаут — страж проснётся!',catchRuneGame);
-}
+/* === 3. ПОЙМАЙ РУНУ (3 раунда, секунды) === */
+function trialCatchRune(){secIntro('🗝️ ИСПЫТАНИЕ: ПОЙМАЙ РУНУ','🎯','3 раунда. Каждый раунд кликни по нужной руне, пока не вышло время. Промах или таймаут — страж проснётся!',catchRuneGame);}
 function catchRuneGame(){
-var runes=['🔥','️','','☠️'];var round=0,total=3,cancelTimer=null;
+var runes=['🔥','❄️','⚡','️'];var round=0,total=3,cancelTimer=null;
+var limits=[2.0,1.6,1.2];
 function next(){
 round++;
 if(round>total){if(cancelTimer)cancelTimer();sfx.mystic();secretReward();return;}
@@ -103,9 +98,8 @@ var el=$('#event-layer');
 el.innerHTML='<div class="ev"><h3 class="ev-title">🎯 ПОЙМАЙ РУНУ</h3><p>Раунд '+round+'/'+total+' — кликни: <span style="font-size:26px">'+runes[target]+'</span></p>'+secTimerBar()+
 '<div id="cr-box" style="display:flex;gap:14px;justify-content:center;margin:16px 0"></div></div>';
 var box=$('#cr-box');
-var tl=Math.max(900,2000-round*300);
 if(cancelTimer)cancelTimer();
-cancelTimer=secCountdown(tl,function(){if(!locked){locked=true;secretFail();}});
+cancelTimer=secCountdown(limits[round-1],function(){if(!locked){locked=true;secretFail();}});
 shuffleLocal([0,1,2,3]).forEach(function(r){
 var b=document.createElement('button');b.textContent=runes[r];
 b.style.cssText='font-size:36px;width:80px;height:80px;border:4px solid var(--ink);border-radius:14px;background:#fff;box-shadow:4px 4px 0 var(--ink);cursor:pointer;';
@@ -116,12 +110,11 @@ box.appendChild(b);
 next();
 }
 
-/* === 4. НАЙДИ ЛИШНЮЮ (3 раунда, таймер) === */
-function trialOddOne(){
-secIntro('🗝️ ИСПЫТАНИЕ: НАЙДИ ЛИШНЮЮ','🧩','3 раунда. Каждый раунд одна руна отличается. Кликни по ней, пока не вышло время!',oddOneGame);
-}
+/* === 4. НАЙДИ ЛИШНЮЮ (3 раунда, секунды) === */
+function trialOddOne(){secIntro('🗝️ ИСПЫТАНИЕ: НАЙДИ ЛИШНЮЮ','🧩','3 раунда. Каждый раунд одна руна отличается. Кликни по ней, пока не вышло время!',oddOneGame);}
 function oddOneGame(){
 var runes=['🔥','❄️','⚡','☠️'];var round=0,total=3,cancelTimer=null;
+var limits=[2.5,2.0,1.5];
 function next(){
 round++;
 if(round>total){if(cancelTimer)cancelTimer();sfx.mystic();secretReward();return;}
@@ -130,9 +123,8 @@ var el=$('#event-layer');
 el.innerHTML='<div class="ev"><h3 class="ev-title">🧩 НАЙДИ ЛИШНЮЮ</h3><p>Раунд '+round+'/'+total+' — кликни по отличающейся!</p>'+secTimerBar()+
 '<div id="oo-grid" style="display:grid;grid-template-columns:repeat(3,80px);gap:10px;justify-content:center;margin:16px 0"></div></div>';
 var grid=$('#oo-grid');
-var tl=Math.max(1000,2600-round*500);
 if(cancelTimer)cancelTimer();
-cancelTimer=secCountdown(tl,function(){if(!locked){locked=true;secretFail();}});
+cancelTimer=secCountdown(limits[round-1],function(){if(!locked){locked=true;secretFail();}});
 for(var i=0;i<9;i++){
 (function(pos){
 var b=document.createElement('button');
