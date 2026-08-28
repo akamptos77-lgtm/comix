@@ -1,23 +1,44 @@
 'use strict';
 /* ============================================
-09-ENGINE-COMBAT: ПОЛНЫЙ боевой движок.
-Все накопленные фиксы и фичи:
- 1. Нелинейный рост врагов (этажи 50+ и 100+), циклы +60%
- 2. Элитные враги на этажах 80+ (шанс растёт)
- 3. Мутации врагов в бесконечном режиме
- 4. Заклинания (стихии с уроном) НЕ уклоняются,
-    обычные атаки — уклоняются
- 5. Молния: +1% урона за очко брони врага (до +50%)
- 6. Навыки поддержки НЕ заканчивают ход (враг не отвечает)
- 7. Бафы тикают ПОСЛЕ хода героя (снапшот) — ярость
-    реально живёт N твоих ударов
- 8. Реликвии: эхо, кактус, призрачный шаг, феникс,
-    мидас, кость удачи, клевер
+09-ENGINE-COMBAT: ПОЛНЫЙ боевой движок (развёрнуто).
+Все фиксы и фичи:
+  1. Нелинейный рост врагов (50+/100+), циклы +60%
+  2. Элитные враги на этажах 80+ (шанс растёт)
+  3. Мутации врагов в бесконечном режиме
+  4. Заклинания НЕ промахиваются (кастеры/навыки),
+     физические и элементальные атаки — уклоняемы
+  5. Молния: +1% урона за очко брони врага (до +50%)
+  6. Навыки поддержки НЕ заканчивают ход (враг не отвечает)
+  7. Бафы тикают ПОСЛЕ хода героя (снапшот)
+  8. Реликвии: эхо, кактус, призрачный шаг, феникс,
+     мидас, кость удачи, клевер
+  9. Реликвии: giveRelic/dropRelic (без лимита)
 ============================================ */
 
 /* ---------- РАСЧЁТ УРОНА ---------- */
 function calcDmg(atk, def, mult, ign){
   return Math.max(1, Math.round(atk * (mult || 1) * rand(.85, 1.15) - (ign ? 0 : def * .5)));
+}
+
+/* ---------- РЕЛИКВИИ (без лимита) ---------- */
+function giveRelic(rel){
+  if(!rel) return false;
+  if(!G.relics) G.relics = [];
+  if(G.relics.indexOf(rel.id) >= 0){
+    G.gold += 60;
+    log('🏺 Дубликат реликвии! +60💰');
+    return false;
+  }
+  G.relics.push(rel.id);
+  log('🏺 РЕЛИКВИЯ: ' + rel.i + ' ' + rel.n + '!');
+  sfx.mystic();
+  return true;
+}
+function dropRelic(){
+  var owned = G.relics || [];
+  var pool = RELICS.filter(function(r){ return owned.indexOf(r.id) < 0; });
+  if(!pool.length) return null;
+  return pick(pool);
 }
 
 /* ---------- УДАР ГЕРОЯ ---------- */
@@ -29,7 +50,11 @@ function heroStrike(mult, opts){
   var projType = opts.proj || CLASSES[h.cls].projType;
   var w = h.equip ? h.equip.weapon : null;
   var el = opts.el || (w && w.el ? w.el : (CLASSES[h.cls].el || 'physical'));
-  var isSpell = !!(opts.spell || window._spell); /* заклинание = стихия с уроном */
+
+  /* ЗАКЛИНАНИЕ = opts.spell / навык со стихией / базовая атака кастера.
+     У физических классов атаки (и элементальное оружие) — уклоняемы. */
+  var casterEl = CLASSES[h.cls].el || 'physical';
+  var isSpell = !!(opts.spell || window._spell || (casterEl !== 'physical'));
 
   var chain = Promise.resolve();
   if(projType){
@@ -51,7 +76,7 @@ function heroStrike(mult, opts){
     if(bfx && bfx.elem === el) em = bfx.mult;
 
     var dmg = calcDmg(getHeroAtk(), e.def, mult * pSkillPow() * em, opts.ignoreDef);
-    /* МОЛНИЯ скалируется от брони врага */
+    /* МОЛНИЯ скалируется от брони врага (+1%/очко, до +50%) */
     if(el === 'lightning') dmg = Math.round(dmg * (1 + Math.min(50, e.def || 0) * 0.01));
     var critMult = (bfx && bfx.critMult) ? bfx.critMult : 1.8;
     if(isCrit) dmg = Math.round(dmg * critMult);
@@ -190,8 +215,7 @@ function startCombat(kind, isMimic){
   $('#event-layer').innerHTML = ''; $('#actions').classList.remove('hidden'); renderElixirs();
   var e = G.enemy;
   var t = e.boss ? (e.final ? '☠ ФИНАЛЬНЫЙ БОСС' : '👑 БОСС') : e.elite ? '⭐ ЭЛИТА' : '⚔️ Бой';
-  var mutTxt = e.mutation ? ' · МУТАЦИЯ: ' + e.mutation : '';
-  log(t + ': ' + e.name + (e.weak ? ' · слаб к ' + ELEMENTS[e.weak].icon : '') + mutTxt);
+  log(t + ': ' + e.name + (e.weak ? ' · слаб к ' + ELEMENTS[e.weak].icon : '') + (e.mutation ? ' · МУТАЦИЯ: ' + e.mutation : ''));
   updateHUD(); updateActions();
 }
 
@@ -232,7 +256,6 @@ function enemyTurn(){
     if(action === 'attack'){ e.fx.lunge = .45; sfx.swing(); return sleep(190).then(function(){ return doEnemyAttack(e, h, 1.0, {}); }); }
     else if(action === 'heavy'){ addBurst(700, 160, 'МОЩЬ!', '#ff8b4a'); return sleep(300).then(function(){ e.fx.lunge = .55; sfx.swing(); return sleep(220); }).then(function(){ return doEnemyAttack(e, h, 1.7, {big:true}); }); }
     else if(action === 'defend'){ e.defending = true; addFloat(700, 200, '🛡', '#9fd8ff'); log(e.name + ' защищается!'); sfx.click(); return sleep(400); }
-    /* ЗАКЛИНАНИЕ врага: нельзя уклониться (magic:true) */
     else if(action === 'spell'){ return fireProjectile(e.tr === 'venom' ? 'poison' : 'arcane', 700, 320, 225, 320).then(function(){ addFloat(225, 230, '✨', '#b66bff'); return doEnemyAttack(e, h, 1.3, {magic:true, word:'ЗАКЛИНАНИЕ!'}); }); }
     else if(action === 'double'){ e.fx.lunge = .35; sfx.swing(); return sleep(150).then(function(){ return doEnemyAttack(e, h, .7, {word:'УДАР!'}); }).then(function(){ if(!h.dead){ e.fx.lunge = .35; sfx.swing(); return sleep(150).then(function(){ return doEnemyAttack(e, h, .7, {word:'УДАР!'}); }); } }); }
     else if(action === 'dodge_prep'){ e.dodge = Math.min(.7, e.dodge + .3); addFloat(700, 200, '💨', '#9fd8ff'); log(e.name + ' уклоняется!'); sfx.click(); return sleep(400); }
@@ -305,18 +328,17 @@ function continueAction(a){
   var h = G.hero, e = G.enemy;
   G.busy = true; updateActions();
 
-  /* Определяем тип действия */
   window._spell = false;
   var supportTurn = false;
   if(a === 'skill'){
     var base = CLASSES[h.cls].skill;
-    if(base.el && base.pow) window._spell = true; /* стихийный базовый навык = заклинание */
+    if(base.el && base.pow) window._spell = true;
   }
   if(a === 'skill2'){
     var s0 = getActiveSkill();
     if(s0){
       if(s0.el && s0.pow) window._spell = true;
-      if(!s0.pow) supportTurn = true; /* поддержка: не заканчивает ход */
+      if(!s0.pow) supportTurn = true;
     }
   }
 

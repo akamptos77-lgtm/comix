@@ -1,15 +1,8 @@
 'use strict';
-/* ============================================
-13-ENGINE-LEVEL: опыт, уровни, атрибуты,
-благословения, финал, старт забега
-ФИКС: русские названия атрибутов в логах
-============================================ */
 var ATTR_RU={str:'СИЛА',agi:'ЛОВКОСТЬ',int:'ИНТЕЛЛЕКТ',vit:'ЖИВУЧЕСТЬ'};
 function gainXp(n){
-  var h=G.hero;
-  if(!h)return Promise.resolve();
-  h.xp+=n;
-  var chain=Promise.resolve();
+  var h=G.hero;if(!h)return Promise.resolve();
+  h.xp+=n;var chain=Promise.resolve();
   while(h.xp>=h.xpNeed){
     h.xp-=h.xpNeed;h.level++;h.xpNeed=50+(h.level-1)*35;
     h.maxHp+=8;h.hp=Math.min(pMaxHp(),h.hp+12);
@@ -17,8 +10,7 @@ function gainXp(n){
     sfx.level();updateHUD();
     (function(lvl){chain=chain.then(function(){return chooseAttr(lvl);});})(h.level);
   }
-  saveRun();
-  return chain;
+  saveRun();return chain;
 }
 function chooseAttr(lvl){
   return new Promise(function(res){
@@ -40,15 +32,13 @@ function chooseAttr(lvl){
       b.onclick=function(){
         if(resolved)return;resolved=true;
         row.querySelectorAll('.attr-btn').forEach(function(x){x.disabled=true;});
-        var k=this.dataset.k;
-        h.stats[k]++;
+        var k=this.dataset.k;h.stats[k]++;
         if(k==='vit')h.hp=Math.min(pMaxHp(),h.hp+15);
         closeOvl('ovl-attrs');
         log('🆙 '+(ATTR_RU[k]||k)+': '+h.stats[k]);
         saveRun();
-        if(Math.random()<.15){
-          chooseCard().then(function(){updateHUD();res();});
-        }else{updateHUD();res();}
+        if(Math.random()<.15){chooseCard().then(function(){updateHUD();res();});}
+        else{updateHUD();res();}
       };
     });
   });
@@ -110,7 +100,9 @@ function showEnd(win){
       '<div>🏺 Реликвии<br><b>'+(G.relics?G.relics.length:0)+'</b></div>'+
       '<div class="big">ОЧКИ: '+s+'</div>';
   }
-  var inp=$('#end-inp');if(inp)inp.value=getUser();
+  /* Имя подставляется АВТОМАТИЧЕСКИ, ввод отключён */
+  var inp=$('#end-inp');
+  if(inp){inp.value=getUser()||'Аноним';inp.disabled=true;}
   var saveBtn=$('#end-save');
   if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='🏆 В рейтинг!';}
   openOvl('ovl-end');
